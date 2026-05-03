@@ -20,6 +20,9 @@ server:
   servlet:
     context-path: /api
 
+cors:
+  allowed-origin: ${CORS_ALLOWED_ORIGIN:http://localhost:5173}
+
 logging:
   pattern:
     console: "[%d{HH:mm:ss.SSS}][%-5level][%logger.%method:line%line] - %msg%n"
