@@ -2,7 +2,7 @@ spring:
   application:
     name: cashboard
   config:
-    import: optional:dotenv:.env
+    import: optional:file:.env[.properties]
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/cashboard}
     username: ${DB_USERNAME:postgres}
