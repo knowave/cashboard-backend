@@ -27,6 +27,8 @@ dependencies {
 	implementation("tools.jackson.module:jackson-module-kotlin")
 	implementation("me.paulschwarz:spring-dotenv:4.0.0")
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.9")
+	implementation("org.flywaydb:flyway-core")
+	implementation("org.flywaydb:flyway-database-postgresql")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
 	runtimeOnly("org.postgresql:postgresql")
 	testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
