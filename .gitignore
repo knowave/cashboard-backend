@@ -40,3 +40,7 @@ out/
 .kotlin
 
 .env
+
+### Claude Code ###
+.claude/settings.local.json
+.omc/
