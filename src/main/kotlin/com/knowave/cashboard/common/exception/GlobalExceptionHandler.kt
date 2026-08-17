@@ -5,8 +5,10 @@ import jakarta.validation.ConstraintViolationException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import java.time.format.DateTimeParseException
 
 @RestControllerAdvice
@@ -50,6 +52,30 @@ class GlobalExceptionHandler {
 				code = "VALIDATION_ERROR",
 				message = "Request validation failed.",
 				errors = errors,
+			),
+		)
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response)
+	}
+
+	@ExceptionHandler(MissingServletRequestParameterException::class)
+	fun handleMissingParam(exception: MissingServletRequestParameterException): ResponseEntity<ApiResponse<ErrorResponse>> {
+		val response = ApiResponse(
+			success = false,
+			data = ErrorResponse(
+				code = "VALIDATION_ERROR",
+				message = "Required parameter '${exception.parameterName}' is missing.",
+			),
+		)
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response)
+	}
+
+	@ExceptionHandler(MethodArgumentTypeMismatchException::class)
+	fun handleTypeMismatch(exception: MethodArgumentTypeMismatchException): ResponseEntity<ApiResponse<ErrorResponse>> {
+		val response = ApiResponse(
+			success = false,
+			data = ErrorResponse(
+				code = "VALIDATION_ERROR",
+				message = "Parameter '${exception.name}' has an invalid value.",
 			),
 		)
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response)
