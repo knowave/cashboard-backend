@@ -4,9 +4,12 @@ import com.knowave.cashboard.common.response.ApiResponse
 import com.knowave.cashboard.common.response.success
 import com.knowave.cashboard.domains.simulation.controller.dto.EarlyRepaymentSimulationRequest
 import com.knowave.cashboard.domains.simulation.controller.dto.EarlyRepaymentSimulationResponse
+import com.knowave.cashboard.domains.simulation.controller.dto.LoanRepaymentSimulationRequest
+import com.knowave.cashboard.domains.simulation.controller.dto.LoanRepaymentSimulationResponse
 import com.knowave.cashboard.domains.simulation.controller.dto.MonthlySimulationResponse
 import com.knowave.cashboard.domains.simulation.controller.dto.monthlySimulationCommand
 import com.knowave.cashboard.domains.simulation.controller.dto.toResponse
+import com.knowave.cashboard.domains.simulation.service.SimulationFacade
 import com.knowave.cashboard.domains.simulation.service.SimulationService
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Min
@@ -24,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/simulations")
 class SimulationController(
 	private val simulationService: SimulationService,
+	private val simulationFacade: SimulationFacade,
 ) {
 	@GetMapping("/monthly")
 	fun simulateMonthly(
@@ -56,4 +60,10 @@ class SimulationController(
 		@Valid @RequestBody request: EarlyRepaymentSimulationRequest,
 	): ApiResponse<EarlyRepaymentSimulationResponse> =
 		success(simulationService.simulateEarlyRepayment(request.toCommand()).toResponse())
+
+	@PostMapping("/loan-repayment")
+	fun simulateLoanRepayment(
+		@Valid @RequestBody request: LoanRepaymentSimulationRequest,
+	): ApiResponse<LoanRepaymentSimulationResponse> =
+		success(simulationFacade.simulateLoanRepayment(request.toCommand()).toResponse())
 }

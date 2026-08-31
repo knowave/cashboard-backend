@@ -1,26 +1,23 @@
 package com.knowave.cashboard.domains.simulation.service
 
 import com.knowave.cashboard.common.exception.CashboardException
-import com.knowave.cashboard.common.exception.NotFoundException
-import com.knowave.cashboard.domains.account.entity.AccountType
-import com.knowave.cashboard.domains.account.repository.AccountRepository
 import com.knowave.cashboard.domains.fixedexpense.entity.FixedExpense
 import com.knowave.cashboard.domains.fixedexpense.repository.FixedExpenseRepository
 import com.knowave.cashboard.domains.loan.entity.Loan
 import com.knowave.cashboard.domains.loan.repository.LoanRepository
+import com.knowave.cashboard.domains.simulation.legacy.LegacyEarlyRepaymentAdapter
 import com.knowave.cashboard.domains.simulation.service.dto.EarlyRepaymentSimulationCommand
 import com.knowave.cashboard.domains.simulation.service.dto.EarlyRepaymentSimulationResult
 import com.knowave.cashboard.domains.simulation.service.dto.MonthlyCashFlowResult
 import com.knowave.cashboard.domains.simulation.service.dto.MonthlySimulationCommand
-import com.knowave.cashboard.domains.simulation.entity.EarlyRepaymentDecision
 import org.springframework.stereotype.Service
 import java.time.YearMonth
 
 @Service
 class SimulationServiceImpl(
-	private val accountRepository: AccountRepository,
 	private val fixedExpenseRepository: FixedExpenseRepository,
 	private val loanRepository: LoanRepository,
+	private val legacyEarlyRepaymentAdapter: LegacyEarlyRepaymentAdapter,
 ) : SimulationService {
 	override fun simulateMonthly(command: MonthlySimulationCommand): List<MonthlyCashFlowResult> {
 		if (command.to.isBefore(command.from)) {
@@ -56,31 +53,8 @@ class SimulationServiceImpl(
 		return results
 	}
 
-	override fun simulateEarlyRepayment(command: EarlyRepaymentSimulationCommand): EarlyRepaymentSimulationResult {
-		val liquidCash = accountRepository.findAll()
-			.filter { AccountType.from(it.type) == AccountType.LIQUID }
-			.sumOf { it.balance }
-		val targetLoan = command.targetLoanId?.let { loanRepository.findById(it) ?: throw NotFoundException("Loan", it) }
-		val possibleAmount = (liquidCash - command.emergencyReserveThreshold).coerceAtLeast(0)
-		val desiredAmount = command.desiredRepaymentAmount
-		val executableAmount = listOfNotNull(
-			possibleAmount,
-			desiredAmount,
-			targetLoan?.currentBalance,
-		).minOrNull() ?: possibleAmount
-		val decision = EarlyRepaymentDecision.fromAvailableAmount(possibleAmount)
-
-		return EarlyRepaymentSimulationResult(
-			liquidCash = liquidCash,
-			emergencyReserveThreshold = command.emergencyReserveThreshold,
-			possibleRepaymentAmount = possibleAmount,
-			desiredRepaymentAmount = desiredAmount,
-			executableRepaymentAmount = executableAmount,
-			targetLoanCurrentBalance = targetLoan?.currentBalance,
-			decision = decision.name,
-			decisionDescription = decision.description,
-		)
-	}
+	override fun simulateEarlyRepayment(command: EarlyRepaymentSimulationCommand): EarlyRepaymentSimulationResult =
+		legacyEarlyRepaymentAdapter.simulate(command)
 
 	private fun FixedExpense.isActiveIn(month: YearMonth): Boolean {
 		val start = YearMonth.parse(startMonth)
