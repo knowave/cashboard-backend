@@ -17,3 +17,11 @@
 - 별도 Git worktree를 생성하거나 사용하지 않고, 프로젝트의 기본 작업공간에서 현재 활성화된 브랜치에 직접 작업한다.
 - 사용자가 명시적으로 요청한 경우에만 Git worktree를 사용한다.
 - 사용자가 변경 내용을 직접 확인할 수 있도록, 별도 요청 전까지 변경 파일을 unstaged·uncommitted 상태로 유지한다.
+
+## Enum 영속화
+
+- 변경 가능성이 있는 enum은 DB-native enum이나 JPA `@Enumerated`로 영속화하지 않는다.
+- DB 컬럼과 Entity 필드는 각각 `VARCHAR`, `String`으로 정의한다.
+- 문자열과 enum 사이의 변환 및 유효성 검증은 서비스 계층에서 수행한다.
+- 저장할 때는 `enum.name`으로 값을 정규화한다.
+- enum 값 목록을 고정하는 DB `CHECK` 제약조건은 추가하지 않는다.

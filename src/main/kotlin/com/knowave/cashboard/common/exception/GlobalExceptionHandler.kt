@@ -4,6 +4,7 @@ import com.knowave.cashboard.common.response.ApiResponse
 import jakarta.validation.ConstraintViolationException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -13,6 +14,17 @@ import java.time.format.DateTimeParseException
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
+	@ExceptionHandler(HttpMessageNotReadableException::class)
+	fun handleUnreadableMessage(exception: HttpMessageNotReadableException): ResponseEntity<ApiResponse<ErrorResponse>> {
+		val dateFailure = generateSequence(exception.cause) { it.cause }
+			.any { it is DateTimeParseException }
+		val error = ErrorResponse(
+			code = if (dateFailure) "INVALID_DATE_FORMAT" else "MALFORMED_REQUEST",
+			message = if (dateFailure) "Date value must be valid yyyy-MM-dd." else "Request body is malformed.",
+		)
+		return ResponseEntity.badRequest().body(ApiResponse(success = false, data = error))
+	}
+
 	@ExceptionHandler(CashboardException::class)
 	fun handleCashboardException(exception: CashboardException): ResponseEntity<ApiResponse<ErrorResponse>> {
 		val response = ApiResponse(
