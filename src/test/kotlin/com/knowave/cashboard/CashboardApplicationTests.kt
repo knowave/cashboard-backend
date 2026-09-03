@@ -1,10 +1,9 @@
 package com.knowave.cashboard
 
+import com.knowave.cashboard.support.PostgreSqlIntegrationTest
 import org.junit.jupiter.api.Test
-import org.springframework.boot.test.context.SpringBootTest
 
-@SpringBootTest
-class CashboardApplicationTests {
+class CashboardApplicationTests : PostgreSqlIntegrationTest() {
 
 	@Test
 	fun contextLoads() {

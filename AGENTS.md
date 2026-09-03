@@ -10,7 +10,23 @@
 
 - 파일 읽기·쓰기, 일반 명령어 실행, Bash 사용은 사용자에게 별도 허락을 묻지 않고 진행한다.
 - `git add`, `git commit`, `git push`를 실행하기 전에는 반드시 사용자에게 허락을 받는다.
-- Codex 실행 환경이나 샌드박스가 자체적으로 권한 승인을 강제하는 작업은 이 규칙과 별개로 필요한 승인을 요청한다.
+- Codex 실행 환경이나 샌드박스가 권한 승인을 강제하는 작업은 가능한 안전한 대안을 사용한다. 대안이 없으면 해당 작업을 실행하거나 중간 승인을 요청하지 않고 최종 보고에 제약 사항을 기록한다.
+
+## 작업 중 소통
+
+- 작업 중에는 사용자에게 질문, 선택 요청, 승인 요청 또는 중간 진행 보고를 하지 않는다.
+- 발견 가능한 프로젝트 정보와 합리적인 가정을 바탕으로 자율적으로 작업하고, 완료 결과와 검증 내용만 최종 보고한다.
+- 사용자 승인이 반드시 필요한 작업은 실행하지 않는다. 특히 별도 허락이 없는 `git add`, `git commit`, `git push`는 생략하고 변경 내용을 unstaged·uncommitted 상태로 유지한다.
+- 사용자 결정 없이는 결과가 크게 달라져 작업을 진행할 수 없는 경우에도 질문하지 않고, 안전하게 완료할 수 있는 범위까지만 처리한 뒤 남은 제약을 최종 보고한다.
+
+## 모델 운영
+
+- Brainstorming은 `Sol High`로 수행한다.
+- Writing Plan은 `Sol High`로 수행한다.
+- 구현은 `Terra Medium`의 Implementer agent 여러 개(`Implementer A`, `Implementer B`, `Implementer C`)로 분리해 수행한다.
+- Integration Review는 변경 위험도와 복잡도에 따라 `Terra Medium` 또는 `Terra High`로 수행한다.
+- Final Review는 고위험 변경에만 `Sol High`로 수행한다.
+- 기본 작업 흐름은 `Sol High Brainstorming` → `Sol High Writing Plan` → `Terra Medium Implementers` → `Terra Medium/High Integration Review` 순서로 진행하고, 고위험 변경이면 마지막에 `Sol High Final Review`를 추가한다.
 
 ## 작업 위치와 Git 상태
 
@@ -25,3 +41,10 @@
 - 문자열과 enum 사이의 변환 및 유효성 검증은 서비스 계층에서 수행한다.
 - 저장할 때는 `enum.name`으로 값을 정규화한다.
 - enum 값 목록을 고정하는 DB `CHECK` 제약조건은 추가하지 않는다.
+
+## Service 구조
+
+- Service interface와 구현 클래스는 반드시 서로 다른 파일로 분리한다.
+- `*Service.kt`에는 외부에 노출할 Service interface와 해당 계약에 필요한 최소 import만 둔다.
+- `*ServiceImpl.kt`에는 구현 클래스와 구현에 필요한 의존성·애노테이션만 둔다.
+- 하나의 파일에 Service interface와 구현 클래스를 함께 선언하지 않는다.
