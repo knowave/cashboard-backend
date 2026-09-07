@@ -14,6 +14,9 @@ class MonthlyBudgetRepositoryImpl(
 	override fun findById(id: UUID): MonthlyBudget? =
 		monthlyBudgetJpaRepository.findById(id).orElse(null)
 
+	override fun findByIdForUpdate(id: UUID): MonthlyBudget? =
+		monthlyBudgetJpaRepository.findByIdForUpdate(id)
+
 	override fun findByTargetMonth(targetMonth: String): MonthlyBudget? =
 		monthlyBudgetJpaRepository.findByTargetMonth(targetMonth)
 

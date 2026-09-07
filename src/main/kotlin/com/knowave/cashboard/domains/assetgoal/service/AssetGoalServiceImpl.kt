@@ -5,11 +5,13 @@ import com.knowave.cashboard.common.exception.DuplicateSavingRecordException
 import com.knowave.cashboard.common.exception.InvalidTargetMonthException
 import com.knowave.cashboard.common.exception.SavingRecordNotFoundException
 import com.knowave.cashboard.domains.account.repository.AccountRepository
+import com.knowave.cashboard.domains.account.repository.AccountBalanceLockRepository
 import com.knowave.cashboard.domains.assetgoal.calculator.AssetGoalCalculation
 import com.knowave.cashboard.domains.assetgoal.calculator.AssetGoalCalculator
 import com.knowave.cashboard.domains.assetgoal.entity.AssetGoal
 import com.knowave.cashboard.domains.assetgoal.entity.SavingPeriod
 import com.knowave.cashboard.domains.assetgoal.entity.SavingRecord
+import com.knowave.cashboard.domains.assetgoal.event.AssetGoalChangedEvent
 import com.knowave.cashboard.domains.assetgoal.repository.AssetGoalRepository
 import com.knowave.cashboard.domains.assetgoal.repository.SavingRecordRepository
 import com.knowave.cashboard.domains.assetgoal.service.dto.AssetGoalDetailResult
@@ -23,7 +25,10 @@ import com.knowave.cashboard.domains.assetgoal.service.dto.UpdateAssetGoalComman
 import com.knowave.cashboard.domains.assetgoal.service.dto.UpdateSavingRecordCommand
 import com.knowave.cashboard.domains.assetgoal.service.dto.toResult
 import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import java.time.Clock
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeParseException
@@ -35,9 +40,26 @@ class AssetGoalServiceImpl(
 	private val savingRecordRepository: SavingRecordRepository,
 	private val accountRepository: AccountRepository,
 	private val assetGoalCalculator: AssetGoalCalculator,
+	private val accountBalanceLockRepository: AccountBalanceLockRepository,
+	private val eventPublisher: ApplicationEventPublisher,
+	private val clock: Clock,
 ) : AssetGoalService {
+	@Transactional
 	override fun createAssetGoal(command: CreateAssetGoalCommand): AssetGoalDetailResult {
+		accountBalanceLockRepository.acquireTotalAssetLock()
 		val assetGoal = assetGoalRepository.save(command.toEntity())
+		val currentAssetAmount = calculateCurrentAssetAmount()
+		eventPublisher.publishEvent(
+			AssetGoalChangedEvent(
+				goalId = requireNotNull(assetGoal.id),
+				goalName = assetGoal.name,
+				previousTargetAmount = assetGoal.targetAmount,
+				currentTargetAmount = assetGoal.targetAmount,
+				previousAssetAmount = 0L,
+				currentAssetAmount = currentAssetAmount,
+				occurredAt = clock.instant(),
+			),
+		)
 		return assetGoal.toDetailResult(DEFAULT_SAVING_PERIOD_MONTHS)
 	}
 
@@ -62,15 +84,33 @@ class AssetGoalServiceImpl(
 		return assetGoal.toDetailResult(savingPeriodMonths)
 	}
 
+	@Transactional
 	override fun updateAssetGoal(assetGoalId: UUID, command: UpdateAssetGoalCommand): AssetGoalDetailResult {
+		accountBalanceLockRepository.acquireTotalAssetLock()
 		val assetGoal = assetGoalRepository.findById(assetGoalId)
 			?: throw AssetGoalNotFoundException(assetGoalId)
 
+		val previousTargetAmount = assetGoal.targetAmount
 		val updatedAssetGoal = AssetGoal.applyUpdate(assetGoal, command)
-		return assetGoalRepository.save(updatedAssetGoal).toDetailResult(DEFAULT_SAVING_PERIOD_MONTHS)
+		val saved = assetGoalRepository.save(updatedAssetGoal)
+		val currentAssetAmount = calculateCurrentAssetAmount()
+		eventPublisher.publishEvent(
+			AssetGoalChangedEvent(
+				goalId = requireNotNull(saved.id),
+				goalName = saved.name,
+				previousTargetAmount = previousTargetAmount,
+				currentTargetAmount = saved.targetAmount,
+				previousAssetAmount = currentAssetAmount,
+				currentAssetAmount = currentAssetAmount,
+				occurredAt = clock.instant(),
+			),
+		)
+		return saved.toDetailResult(DEFAULT_SAVING_PERIOD_MONTHS)
 	}
 
+	@Transactional
 	override fun deleteAssetGoal(assetGoalId: UUID): Boolean {
+		accountBalanceLockRepository.acquireTotalAssetLock()
 		val assetGoal = assetGoalRepository.findById(assetGoalId)
 			?: throw AssetGoalNotFoundException(assetGoalId)
 		assetGoalRepository.delete(assetGoal)
@@ -223,7 +263,8 @@ class AssetGoalServiceImpl(
 		}
 	}
 
-	private fun calculateCurrentAssetAmount(): Long = accountRepository.findAll().sumOf { it.balance }
+	private fun calculateCurrentAssetAmount(): Long = accountRepository.findAll()
+		.fold(0L) { total, account -> Math.addExact(total, account.balance) }
 
 	private companion object {
 		const val DEFAULT_SAVING_PERIOD_MONTHS = 3
