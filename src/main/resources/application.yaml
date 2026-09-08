@@ -23,6 +23,11 @@ server:
 cors:
   allowed-origin: ${CORS_ALLOWED_ORIGIN:http://localhost:5173}
 
+notification:
+  scheduler:
+    cron: ${NOTIFICATION_SCHEDULER_CRON:0 0 9 * * *}
+    zone: ${NOTIFICATION_TIME_ZONE:Asia/Seoul}
+
 logging:
   pattern:
     console: "[%d{HH:mm:ss.SSS}][%-5level][%logger.%method:line%line] - %msg%n"
