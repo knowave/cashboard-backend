@@ -45,12 +45,13 @@ class AssetGoalServiceImpl(
 	private val clock: Clock,
 ) : AssetGoalService {
 	@Transactional
-	override fun createAssetGoal(command: CreateAssetGoalCommand): AssetGoalDetailResult {
-		accountBalanceLockRepository.acquireTotalAssetLock()
-		val assetGoal = assetGoalRepository.save(command.toEntity())
-		val currentAssetAmount = calculateCurrentAssetAmount()
+	override fun createAssetGoal(userId: UUID, command: CreateAssetGoalCommand): AssetGoalDetailResult {
+		accountBalanceLockRepository.acquireTotalAssetLock(userId)
+		val assetGoal = assetGoalRepository.save(command.toEntity(userId))
+		val currentAssetAmount = calculateCurrentAssetAmount(userId)
 		eventPublisher.publishEvent(
 			AssetGoalChangedEvent(
+				userId = userId,
 				goalId = requireNotNull(assetGoal.id),
 				goalName = assetGoal.name,
 				previousTargetAmount = assetGoal.targetAmount,
@@ -60,14 +61,14 @@ class AssetGoalServiceImpl(
 				occurredAt = clock.instant(),
 			),
 		)
-		return assetGoal.toDetailResult(DEFAULT_SAVING_PERIOD_MONTHS)
+		return assetGoal.toDetailResult(userId, DEFAULT_SAVING_PERIOD_MONTHS)
 	}
 
-	override fun getAssetGoalSummaries(savingPeriodMonths: Int): List<AssetGoalSummaryResult> {
+	override fun getAssetGoalSummaries(userId: UUID, savingPeriodMonths: Int): List<AssetGoalSummaryResult> {
 		SavingPeriod.from(savingPeriodMonths)
-		val currentAssetAmount = calculateCurrentAssetAmount()
+		val currentAssetAmount = calculateCurrentAssetAmount(userId)
 
-		return assetGoalRepository.findAll().map { assetGoal ->
+		return assetGoalRepository.findAllByUserId(userId).map { assetGoal ->
 			val calculation = assetGoalCalculator.calculate(
 				targetAmount = assetGoal.targetAmount,
 				currentAssetAmount = currentAssetAmount,
@@ -78,24 +79,29 @@ class AssetGoalServiceImpl(
 		}
 	}
 
-	override fun getAssetGoalDetail(assetGoalId: UUID, savingPeriodMonths: Int): AssetGoalDetailResult {
-		val assetGoal = assetGoalRepository.findById(assetGoalId)
+	override fun getAssetGoalDetail(userId: UUID, assetGoalId: UUID, savingPeriodMonths: Int): AssetGoalDetailResult {
+		val assetGoal = assetGoalRepository.findByIdAndUserId(assetGoalId, userId)
 			?: throw AssetGoalNotFoundException(assetGoalId)
-		return assetGoal.toDetailResult(savingPeriodMonths)
+		return assetGoal.toDetailResult(userId, savingPeriodMonths)
 	}
 
 	@Transactional
-	override fun updateAssetGoal(assetGoalId: UUID, command: UpdateAssetGoalCommand): AssetGoalDetailResult {
-		accountBalanceLockRepository.acquireTotalAssetLock()
-		val assetGoal = assetGoalRepository.findById(assetGoalId)
+	override fun updateAssetGoal(
+		userId: UUID,
+		assetGoalId: UUID,
+		command: UpdateAssetGoalCommand,
+	): AssetGoalDetailResult {
+		accountBalanceLockRepository.acquireTotalAssetLock(userId)
+		val assetGoal = assetGoalRepository.findByIdAndUserId(assetGoalId, userId)
 			?: throw AssetGoalNotFoundException(assetGoalId)
 
 		val previousTargetAmount = assetGoal.targetAmount
 		val updatedAssetGoal = AssetGoal.applyUpdate(assetGoal, command)
 		val saved = assetGoalRepository.save(updatedAssetGoal)
-		val currentAssetAmount = calculateCurrentAssetAmount()
+		val currentAssetAmount = calculateCurrentAssetAmount(userId)
 		eventPublisher.publishEvent(
 			AssetGoalChangedEvent(
+				userId = userId,
 				goalId = requireNotNull(saved.id),
 				goalName = saved.name,
 				previousTargetAmount = previousTargetAmount,
@@ -105,22 +111,26 @@ class AssetGoalServiceImpl(
 				occurredAt = clock.instant(),
 			),
 		)
-		return saved.toDetailResult(DEFAULT_SAVING_PERIOD_MONTHS)
+		return saved.toDetailResult(userId, DEFAULT_SAVING_PERIOD_MONTHS)
 	}
 
 	@Transactional
-	override fun deleteAssetGoal(assetGoalId: UUID): Boolean {
-		accountBalanceLockRepository.acquireTotalAssetLock()
-		val assetGoal = assetGoalRepository.findById(assetGoalId)
+	override fun deleteAssetGoal(userId: UUID, assetGoalId: UUID): Boolean {
+		accountBalanceLockRepository.acquireTotalAssetLock(userId)
+		val assetGoal = assetGoalRepository.findByIdAndUserId(assetGoalId, userId)
 			?: throw AssetGoalNotFoundException(assetGoalId)
 		assetGoalRepository.delete(assetGoal)
 		return true
 	}
 
-	override fun simulateAssetGoal(assetGoalId: UUID, command: AssetGoalSimulationCommand): AssetGoalSimulationResult {
-		val assetGoal = assetGoalRepository.findById(assetGoalId)
+	override fun simulateAssetGoal(
+		userId: UUID,
+		assetGoalId: UUID,
+		command: AssetGoalSimulationCommand,
+	): AssetGoalSimulationResult {
+		val assetGoal = assetGoalRepository.findByIdAndUserId(assetGoalId, userId)
 			?: throw AssetGoalNotFoundException(assetGoalId)
-		val currentAssetAmount = calculateCurrentAssetAmount()
+		val currentAssetAmount = calculateCurrentAssetAmount(userId)
 		val remainingAmount = assetGoalCalculator.calculateRemainingAmount(
 			currentAssetAmount = currentAssetAmount,
 			targetAmount = assetGoal.targetAmount,
@@ -150,33 +160,33 @@ class AssetGoalServiceImpl(
 		)
 	}
 
-	override fun recordMonthlySaving(command: CreateSavingRecordCommand): SavingRecordResult {
+	override fun recordMonthlySaving(userId: UUID, command: CreateSavingRecordCommand): SavingRecordResult {
 		validateTargetMonth(command.targetMonth)
-		if (savingRecordRepository.existsByTargetMonth(command.targetMonth)) {
+		if (savingRecordRepository.existsByTargetMonthAndUserId(command.targetMonth, userId)) {
 			throw DuplicateSavingRecordException(command.targetMonth)
 		}
 
 		return try {
-			savingRecordRepository.save(command.toEntity()).toResult()
+			savingRecordRepository.save(command.toEntity(userId)).toResult()
 		} catch (exception: DataIntegrityViolationException) {
 			throw DuplicateSavingRecordException(command.targetMonth)
 		}
 	}
 
-	override fun getMonthlySavingRecords(periodMonths: Int): List<SavingRecordResult> =
-		findSavingRecords(periodMonths).map { it.toResult() }
+	override fun getMonthlySavingRecords(userId: UUID, periodMonths: Int): List<SavingRecordResult> =
+		findSavingRecords(userId, periodMonths).map { it.toResult() }
 
-	override fun getMonthlySavingRecord(targetMonth: String): SavingRecordResult {
+	override fun getMonthlySavingRecord(userId: UUID, targetMonth: String): SavingRecordResult {
 		validateTargetMonth(targetMonth)
-		return savingRecordRepository.findByTargetMonth(targetMonth)?.toResult()
+		return savingRecordRepository.findByTargetMonthAndUserId(targetMonth, userId)?.toResult()
 			?: throw SavingRecordNotFoundException(targetMonth)
 	}
 
-	override fun updateMonthlySaving(id: UUID, command: UpdateSavingRecordCommand): SavingRecordResult {
+	override fun updateMonthlySaving(userId: UUID, id: UUID, command: UpdateSavingRecordCommand): SavingRecordResult {
 		validateTargetMonth(command.targetMonth)
-		val savingRecord = savingRecordRepository.findById(id)
+		val savingRecord = savingRecordRepository.findByIdAndUserId(id, userId)
 			?: throw SavingRecordNotFoundException(id)
-		val existingRecord = savingRecordRepository.findByTargetMonth(command.targetMonth)
+		val existingRecord = savingRecordRepository.findByTargetMonthAndUserId(command.targetMonth, userId)
 
 		if (existingRecord != null && existingRecord.id != id) {
 			throw DuplicateSavingRecordException(command.targetMonth)
@@ -189,18 +199,18 @@ class AssetGoalServiceImpl(
 		}
 	}
 
-	override fun deleteMonthlySaving(id: UUID): Boolean {
-		val savingRecord = savingRecordRepository.findById(id)
+	override fun deleteMonthlySaving(userId: UUID, id: UUID): Boolean {
+		val savingRecord = savingRecordRepository.findByIdAndUserId(id, userId)
 			?: throw SavingRecordNotFoundException(id)
 		savingRecordRepository.delete(savingRecord)
 		return true
 	}
 
-	private fun AssetGoal.toDetailResult(savingPeriodMonths: Int): AssetGoalDetailResult {
-		val savingAmounts = findSavingAmounts(savingPeriodMonths)
+	private fun AssetGoal.toDetailResult(userId: UUID, savingPeriodMonths: Int): AssetGoalDetailResult {
+		val savingAmounts = findSavingAmounts(userId, savingPeriodMonths)
 		val calculation = assetGoalCalculator.calculate(
 			targetAmount = targetAmount,
-			currentAssetAmount = calculateCurrentAssetAmount(),
+			currentAssetAmount = calculateCurrentAssetAmount(userId),
 			targetDate = targetDate,
 			savingAmounts = savingAmounts,
 		)
@@ -236,18 +246,19 @@ class AssetGoalServiceImpl(
 			updatedAt = requireNotNull(updatedAt),
 		)
 
-	private fun findSavingAmounts(savingPeriodMonths: Int): List<Long> {
-		return findSavingRecords(savingPeriodMonths).map { it.amount }
+	private fun findSavingAmounts(userId: UUID, savingPeriodMonths: Int): List<Long> {
+		return findSavingRecords(userId, savingPeriodMonths).map { it.amount }
 	}
 
-	private fun findSavingRecords(savingPeriodMonths: Int): List<SavingRecord> {
+	private fun findSavingRecords(userId: UUID, savingPeriodMonths: Int): List<SavingRecord> {
 		val savingPeriod = SavingPeriod.from(savingPeriodMonths)
 		val toTargetMonth = YearMonth.now().minusMonths(1)
 		val fromTargetMonth = toTargetMonth.minusMonths(savingPeriod.months.toLong() - 1)
 
-		return savingRecordRepository.findAllByTargetMonthBetweenOrderByTargetMonthDesc(
+		return savingRecordRepository.findAllByTargetMonthBetweenAndUserIdOrderByTargetMonthDesc(
 			fromTargetMonth = fromTargetMonth.toString(),
 			toTargetMonth = toTargetMonth.toString(),
+			userId = userId,
 		)
 	}
 
@@ -263,7 +274,7 @@ class AssetGoalServiceImpl(
 		}
 	}
 
-	private fun calculateCurrentAssetAmount(): Long = accountRepository.findAll()
+	private fun calculateCurrentAssetAmount(userId: UUID): Long = accountRepository.findAllByUserId(userId)
 		.fold(0L) { total, account -> Math.addExact(total, account.balance) }
 
 	private companion object {

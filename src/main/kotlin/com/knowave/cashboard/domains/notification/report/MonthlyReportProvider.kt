@@ -9,6 +9,7 @@ import com.knowave.cashboard.domains.expenseanalysis.service.dto.CategoryExpense
 import org.springframework.stereotype.Component
 import java.time.LocalDate
 import java.time.YearMonth
+import java.util.UUID
 
 @Component
 class MonthlyReportProvider(
@@ -17,13 +18,13 @@ class MonthlyReportProvider(
 	private val accountRepository: AccountRepository,
 	private val assetGoalCalculator: AssetGoalCalculator,
 ) {
-	fun generate(runDate: LocalDate): MonthlyReportSummary {
+	fun generate(userId: UUID, runDate: LocalDate): MonthlyReportSummary {
 		val yearMonth = YearMonth.from(runDate).minusMonths(1)
-		val analysis = expenseAnalysisService.getAnalysis(yearMonth.year, yearMonth.monthValue)
-		val currentAssets = accountRepository.findAll().fold(0L) { total, account ->
+		val analysis = expenseAnalysisService.getAnalysis(userId, yearMonth.year, yearMonth.monthValue)
+		val currentAssets = accountRepository.findAllByUserId(userId).fold(0L) { total, account ->
 			Math.addExact(total, account.balance)
 		}
-		val goal = assetGoalRepository.findAll().sortedWith(
+		val goal = assetGoalRepository.findAllByUserId(userId).sortedWith(
 			compareBy<AssetGoal> { it.targetDate }
 				.thenBy(nullsLast()) { it.createdAt }
 				.thenBy(nullsLast()) { it.id },

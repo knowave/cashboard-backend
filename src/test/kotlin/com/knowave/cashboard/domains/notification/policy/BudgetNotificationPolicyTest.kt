@@ -14,6 +14,7 @@ import java.util.stream.Stream
 class BudgetNotificationPolicyTest {
 	private val policy = BudgetNotificationPolicy()
 	private val budgetId = UUID.fromString("11111111-1111-1111-1111-111111111111")
+	private val userId = UUID.randomUUID()
 
 	@Test
 	fun `70에서 105퍼센트가 되면 두 marker와 초과 알림만 반환한다`() {
@@ -52,6 +53,7 @@ class BudgetNotificationPolicyTest {
 		previousBudget: Long = budget,
 		currentBudget: Long = budget,
 	): BudgetUsageChangedEvent = BudgetUsageChangedEvent(
+		userId = userId,
 		monthlyBudgetId = budgetId,
 		previousBudgetAmount = previousBudget,
 		previousUsedAmount = previousUsed,
@@ -73,7 +75,7 @@ class BudgetNotificationPolicyTest {
 		fun budgetTransitions(): Stream<BudgetCase> {
 			val id = UUID.fromString("11111111-1111-1111-1111-111111111111")
 			fun event(previousUsed: Long, currentUsed: Long, budget: Long) = BudgetUsageChangedEvent(
-				id, budget, previousUsed, budget, currentUsed, OCCURRED_AT,
+				UUID.randomUUID(), id, budget, previousUsed, budget, currentUsed, OCCURRED_AT,
 			)
 			val huge = Long.MAX_VALUE / 2
 			val hugeSeventyNinePercent = BigInteger.valueOf(huge)

@@ -19,6 +19,7 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 class FinancialScheduleOccurrenceSourceTest {
+	private val userId = UUID.fromString("00000000-0000-0000-0000-0000000000aa")
 	private val repository = FakeOccurrenceRepository()
 	private val source = FinancialScheduleOccurrenceSource(repository, ScheduleOccurrenceGenerator())
 
@@ -26,8 +27,9 @@ class FinancialScheduleOccurrenceSourceTest {
 	fun `저장 일정을 enum과 반복 규칙으로 변환해 발생일을 반환한다`() {
 		repository.candidates = listOf(monthlySchedule(day = 31))
 
-		val result = source.findOccurrences(LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28))
+		val result = source.findOccurrences(userId, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28))
 
+		assertThat(repository.lastUserId).isEqualTo(userId)
 		assertThat(repository.lastRange).isEqualTo(
 			LocalDate.of(2026, 2, 1) to LocalDate.of(2026, 2, 28),
 		)
@@ -40,7 +42,7 @@ class FinancialScheduleOccurrenceSourceTest {
 		repository.candidates = listOf(schedule)
 
 		assertThatThrownBy {
-			source.findOccurrences(LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28))
+			source.findOccurrences(userId, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28))
 		}.isInstanceOf(FinancialScheduleDataIntegrityException::class.java)
 			.hasMessageContaining("field=direction")
 			.hasCauseInstanceOf(InvalidEnumValueException::class.java)
@@ -54,7 +56,7 @@ class FinancialScheduleOccurrenceSourceTest {
 		repository.candidates = listOf(schedule)
 
 		assertThatThrownBy {
-			source.findOccurrences(LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28))
+			source.findOccurrences(userId, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28))
 		}.isInstanceOf(FinancialScheduleDataIntegrityException::class.java)
 			.hasMessageContaining("field=recurrence")
 			.hasCauseInstanceOf(com.knowave.cashboard.common.exception.InvalidRecurrenceRuleException::class.java)
@@ -63,7 +65,7 @@ class FinancialScheduleOccurrenceSourceTest {
 	@Test
 	fun `후보가 없어도 역전된 조회 범위는 거부하고 Repository를 호출하지 않는다`() {
 		assertThatThrownBy {
-			source.findOccurrences(LocalDate.of(2026, 2, 28), LocalDate.of(2026, 2, 1))
+			source.findOccurrences(userId, LocalDate.of(2026, 2, 28), LocalDate.of(2026, 2, 1))
 		}.isInstanceOf(InvalidFinancialSchedulePeriodException::class.java)
 
 		assertThat(repository.lastRange).isNull()
@@ -76,7 +78,7 @@ class FinancialScheduleOccurrenceSourceTest {
 			monthlySchedule(15, "가", UUID.fromString("00000000-0000-0000-0000-000000000001")),
 		)
 
-		val result = source.findOccurrences(LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28))
+		val result = source.findOccurrences(userId, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28))
 
 		assertThat(result.map { it.title }).containsExactly("가", "나")
 	}
@@ -86,6 +88,7 @@ class FinancialScheduleOccurrenceSourceTest {
 		title: String = "월 반복",
 		id: UUID = UUID.randomUUID(),
 	) = FinancialSchedule.create(
+		userId = userId,
 		type = ScheduleType.ETC,
 		title = title,
 		amount = 10_000L,
@@ -97,11 +100,13 @@ class FinancialScheduleOccurrenceSourceTest {
 private class FakeOccurrenceRepository : FinancialScheduleRepository {
 	var candidates: List<FinancialSchedule> = emptyList()
 	var lastRange: Pair<LocalDate, LocalDate>? = null
+	var lastUserId: UUID? = null
 
 	override fun save(schedule: FinancialSchedule): FinancialSchedule = schedule
-	override fun findById(id: UUID): FinancialSchedule? = null
-	override fun findAllOrderByCreatedAtDesc(): List<FinancialSchedule> = emptyList()
-	override fun findCandidates(from: LocalDate, toInclusive: LocalDate): List<FinancialSchedule> {
+	override fun findByIdAndUserId(id: UUID, userId: UUID): FinancialSchedule? = null
+	override fun findAllOrderByCreatedAtDesc(userId: UUID): List<FinancialSchedule> = emptyList()
+	override fun findCandidates(userId: UUID, from: LocalDate, toInclusive: LocalDate): List<FinancialSchedule> {
+		lastUserId = userId
 		lastRange = from to toInclusive
 		return candidates
 	}

@@ -8,6 +8,7 @@ import com.knowave.cashboard.domains.simulation.service.dto.LoanRepaymentSimulat
 import com.knowave.cashboard.domains.simulation.service.dto.LoanRepaymentSimulationResult
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.util.UUID
 
 @Service
 @Transactional(readOnly = true)
@@ -16,14 +17,15 @@ class SimulationFacade(
 	private val emergencyFundPolicy: EmergencyFundPolicy,
 	private val loanRepaymentCalculator: LoanRepaymentCalculator,
 ) {
-	fun simulateLoanRepayment(command: LoanRepaymentSimulationCommand): LoanRepaymentSimulationResult =
-		simulateLoanRepayment(command, recommendationOverride = null)
+	fun simulateLoanRepayment(userId: UUID, command: LoanRepaymentSimulationCommand): LoanRepaymentSimulationResult =
+		simulateLoanRepayment(userId, command, recommendationOverride = null)
 
 	internal fun simulateLoanRepayment(
+		userId: UUID,
 		command: LoanRepaymentSimulationCommand,
 		recommendationOverride: EmergencyFundRecommendation?,
 	): LoanRepaymentSimulationResult {
-		val context = contextProvider.loadLoanRepaymentContext(command.loanId)
+		val context = contextProvider.loadLoanRepaymentContext(userId, command.loanId)
 		val liquidityContext = context.toLiquidityContext()
 		val recommendation = recommendationOverride ?: emergencyFundPolicy.recommend(liquidityContext)
 		val liquidity = emergencyFundPolicy.assess(

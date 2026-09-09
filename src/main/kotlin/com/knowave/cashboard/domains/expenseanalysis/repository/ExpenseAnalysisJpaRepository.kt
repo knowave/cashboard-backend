@@ -15,23 +15,31 @@ interface ExpenseAnalysisJpaRepository : Repository<BudgetExpense, UUID> {
 		value = """
 			SELECT COALESCE(category, 'UNCATEGORIZED') AS category, CAST(SUM(amount) AS BIGINT) AS amount
 			FROM budget_expenses
-			WHERE spent_at >= :start AND spent_at < :end
+			WHERE user_id = :userId AND spent_at >= :start AND spent_at < :end
 			GROUP BY COALESCE(category, 'UNCATEGORIZED')
 			ORDER BY SUM(amount) DESC, 1 ASC
 		""",
 		nativeQuery = true,
 	)
-	fun findCategoryExpenses(@Param("start") start: LocalDate, @Param("end") end: LocalDate): List<CategoryExpenseProjection>
+	fun findCategoryExpenses(
+		@Param("userId") userId: UUID,
+		@Param("start") start: LocalDate,
+		@Param("end") end: LocalDate,
+	): List<CategoryExpenseProjection>
 
 	@Query(
 		value = """
 			SELECT TO_CHAR(spent_at, 'YYYY-MM') AS "yearMonth", CAST(SUM(amount) AS BIGINT) AS amount
 			FROM budget_expenses
-			WHERE spent_at >= :start AND spent_at < :end
+			WHERE user_id = :userId AND spent_at >= :start AND spent_at < :end
 			GROUP BY TO_CHAR(spent_at, 'YYYY-MM')
 			ORDER BY 1
 		""",
 		nativeQuery = true,
 	)
-	fun findMonthlyExpenses(@Param("start") start: LocalDate, @Param("end") end: LocalDate): List<MonthlyExpenseProjection>
+	fun findMonthlyExpenses(
+		@Param("userId") userId: UUID,
+		@Param("start") start: LocalDate,
+		@Param("end") end: LocalDate,
+	): List<MonthlyExpenseProjection>
 }

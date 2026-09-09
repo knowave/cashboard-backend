@@ -2,6 +2,7 @@ package com.knowave.cashboard.domains.simulation.controller
 
 import com.knowave.cashboard.common.response.ApiResponse
 import com.knowave.cashboard.common.response.success
+import com.knowave.cashboard.common.security.AuthenticatedUser
 import com.knowave.cashboard.domains.simulation.controller.dto.EarlyRepaymentSimulationRequest
 import com.knowave.cashboard.domains.simulation.controller.dto.EarlyRepaymentSimulationResponse
 import com.knowave.cashboard.domains.simulation.controller.dto.LoanRepaymentSimulationRequest
@@ -14,6 +15,8 @@ import com.knowave.cashboard.domains.simulation.service.SimulationService
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.Pattern
+import java.util.UUID
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
@@ -31,6 +34,7 @@ class SimulationController(
 ) {
 	@GetMapping("/monthly")
 	fun simulateMonthly(
+		@AuthenticationPrincipal user: AuthenticatedUser,
 		@RequestParam
 		@Pattern(regexp = "\\d{4}-\\d{2}", message = "from must be yyyy-MM.")
 		from: String,
@@ -52,18 +56,21 @@ class SimulationController(
 		savings: Long,
 	): ApiResponse<List<MonthlySimulationResponse>> {
 		val command = monthlySimulationCommand(from, to, monthlySalary, emergencyFund, savings)
-		return success(simulationService.simulateMonthly(command).map { it.toResponse() })
+		return success(simulationService.simulateMonthly(user.userId, command).map { it.toResponse() })
 	}
 
 	@PostMapping("/early-repayment")
 	fun simulateEarlyRepayment(
+		@AuthenticationPrincipal user: AuthenticatedUser,
 		@Valid @RequestBody request: EarlyRepaymentSimulationRequest,
 	): ApiResponse<EarlyRepaymentSimulationResponse> =
-		success(simulationService.simulateEarlyRepayment(request.toCommand()).toResponse())
+		success(simulationService.simulateEarlyRepayment(user.userId, request.toCommand()).toResponse())
 
 	@PostMapping("/loan-repayment")
 	fun simulateLoanRepayment(
+		@AuthenticationPrincipal user: AuthenticatedUser,
 		@Valid @RequestBody request: LoanRepaymentSimulationRequest,
 	): ApiResponse<LoanRepaymentSimulationResponse> =
-		success(simulationFacade.simulateLoanRepayment(request.toCommand()).toResponse())
+		success(simulationFacade.simulateLoanRepayment(user.userId, request.toCommand()).toResponse())
+
 }

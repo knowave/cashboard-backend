@@ -5,12 +5,13 @@ import java.util.UUID
 
 interface SavingRecordRepository {
 	fun save(savingRecord: SavingRecord): SavingRecord
-	fun findById(id: UUID): SavingRecord?
-	fun findByTargetMonth(targetMonth: String): SavingRecord?
-	fun findAllByTargetMonthBetweenOrderByTargetMonthDesc(
+	fun findByIdAndUserId(id: UUID, userId: UUID): SavingRecord?
+	fun findByTargetMonthAndUserId(targetMonth: String, userId: UUID): SavingRecord?
+	fun findAllByTargetMonthBetweenAndUserIdOrderByTargetMonthDesc(
 		fromTargetMonth: String,
 		toTargetMonth: String,
+		userId: UUID,
 	): List<SavingRecord>
-	fun existsByTargetMonth(targetMonth: String): Boolean
+	fun existsByTargetMonthAndUserId(targetMonth: String, userId: UUID): Boolean
 	fun delete(savingRecord: SavingRecord)
 }

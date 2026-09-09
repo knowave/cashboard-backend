@@ -18,40 +18,44 @@ data class BalanceShortageTransition(
 )
 
 interface BalanceShortageStateRepository {
-	fun findByScopeKeyForUpdate(scopeKey: String): BalanceShortageState?
+	fun findByUserIdForUpdate(userId: UUID): BalanceShortageState?
 	fun save(state: BalanceShortageState): BalanceShortageState
-	fun transition(scopeKey: String, shortageDate: LocalDate?): BalanceShortageTransition
+	fun transition(userId: UUID, shortageDate: LocalDate?): BalanceShortageTransition
 }
 
 interface BalanceShortageStateJpaRepository : JpaRepository<BalanceShortageState, UUID> {
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
-	fun findByScopeKey(scopeKey: String): BalanceShortageState?
+	fun findByUserId(userId: UUID): BalanceShortageState?
 
+	// ponytail: scope_key is still NOT NULL (V8 hasn't dropped it) so it stays hardcoded here.
+	// ON CONFLICT targets user_id in anticipation of V8's UNIQUE(user_id); until V8 runs, a
+	// second user's insert can raise a duplicate-key error against the still-global
+	// UNIQUE(scope_key) instead of being silently skipped. Expected pre-V8 breakage.
 	@Modifying
 	@Query(
 		value = """
-			INSERT INTO balance_shortage_states(id, scope_key, shortage_date, episode, created_at, updated_at)
-			VALUES (:id, :scopeKey, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-			ON CONFLICT (scope_key) DO NOTHING
+			INSERT INTO balance_shortage_states(id, user_id, scope_key, shortage_date, episode, created_at, updated_at)
+			VALUES (:id, :userId, 'SINGLE_USER', NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			ON CONFLICT (user_id) DO NOTHING
 		""",
 		nativeQuery = true,
 	)
-	fun insertInitialIfAbsent(@Param("id") id: UUID, @Param("scopeKey") scopeKey: String): Int
+	fun insertInitialIfAbsent(@Param("id") id: UUID, @Param("userId") userId: UUID): Int
 }
 
 @Repository
 class BalanceShortageStateRepositoryImpl(
 	private val balanceShortageStateJpaRepository: BalanceShortageStateJpaRepository,
 ) : BalanceShortageStateRepository {
-	override fun findByScopeKeyForUpdate(scopeKey: String): BalanceShortageState? =
-		balanceShortageStateJpaRepository.findByScopeKey(scopeKey)
+	override fun findByUserIdForUpdate(userId: UUID): BalanceShortageState? =
+		balanceShortageStateJpaRepository.findByUserId(userId)
 
 	override fun save(state: BalanceShortageState): BalanceShortageState = balanceShortageStateJpaRepository.save(state)
 
 	@Transactional
-	override fun transition(scopeKey: String, shortageDate: LocalDate?): BalanceShortageTransition {
-		balanceShortageStateJpaRepository.insertInitialIfAbsent(UUID.randomUUID(), scopeKey)
-		val state = requireNotNull(findByScopeKeyForUpdate(scopeKey))
+	override fun transition(userId: UUID, shortageDate: LocalDate?): BalanceShortageTransition {
+		balanceShortageStateJpaRepository.insertInitialIfAbsent(UUID.randomUUID(), userId)
+		val state = requireNotNull(findByUserIdForUpdate(userId))
 		if (shortageDate == null) {
 			state.shortageDate = null
 			return BalanceShortageTransition(state.episode, false)

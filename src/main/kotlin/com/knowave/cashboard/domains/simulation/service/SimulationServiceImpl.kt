@@ -12,6 +12,7 @@ import com.knowave.cashboard.domains.simulation.service.dto.MonthlyCashFlowResul
 import com.knowave.cashboard.domains.simulation.service.dto.MonthlySimulationCommand
 import org.springframework.stereotype.Service
 import java.time.YearMonth
+import java.util.UUID
 
 @Service
 class SimulationServiceImpl(
@@ -19,13 +20,13 @@ class SimulationServiceImpl(
 	private val loanRepository: LoanRepository,
 	private val legacyEarlyRepaymentAdapter: LegacyEarlyRepaymentAdapter,
 ) : SimulationService {
-	override fun simulateMonthly(command: MonthlySimulationCommand): List<MonthlyCashFlowResult> {
+	override fun simulateMonthly(userId: UUID, command: MonthlySimulationCommand): List<MonthlyCashFlowResult> {
 		if (command.to.isBefore(command.from)) {
 			throw CashboardException("INVALID_PERIOD", "to must be greater than or equal to from.")
 		}
 
-		val fixedExpenses = fixedExpenseRepository.findAll()
-		val loans = loanRepository.findAll()
+		val fixedExpenses = fixedExpenseRepository.findAllByUserId(userId)
+		val loans = loanRepository.findAllByUserId(userId)
 		var estimatedLoanBalance = loans.sumOf { it.currentBalance }
 		val results = mutableListOf<MonthlyCashFlowResult>()
 		var month = command.from
@@ -53,8 +54,8 @@ class SimulationServiceImpl(
 		return results
 	}
 
-	override fun simulateEarlyRepayment(command: EarlyRepaymentSimulationCommand): EarlyRepaymentSimulationResult =
-		legacyEarlyRepaymentAdapter.simulate(command)
+	override fun simulateEarlyRepayment(userId: UUID, command: EarlyRepaymentSimulationCommand): EarlyRepaymentSimulationResult =
+		legacyEarlyRepaymentAdapter.simulate(userId, command)
 
 	private fun FixedExpense.isActiveIn(month: YearMonth): Boolean {
 		val start = YearMonth.parse(startMonth)

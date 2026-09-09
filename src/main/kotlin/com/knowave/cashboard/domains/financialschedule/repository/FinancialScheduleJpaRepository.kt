@@ -8,19 +8,25 @@ import java.time.LocalDate
 import java.util.UUID
 
 interface FinancialScheduleJpaRepository : JpaRepository<FinancialSchedule, UUID> {
-	fun findAllByOrderByCreatedAtDescIdAsc(): List<FinancialSchedule>
+	fun findByIdAndUserId(id: UUID, userId: UUID): FinancialSchedule?
+
+	fun findAllByUserIdOrderByCreatedAtDescIdAsc(userId: UUID): List<FinancialSchedule>
 
 	@Query(
 		"""
 		select schedule from FinancialSchedule schedule
-		where schedule.scheduledDate between :from and :toInclusive
-		   or (
-		       schedule.startDate <= :toInclusive
-		       and (schedule.endDate is null or schedule.endDate >= :from)
-		   )
+		where schedule.userId = :userId
+		  and (
+		      schedule.scheduledDate between :from and :toInclusive
+		      or (
+		          schedule.startDate <= :toInclusive
+		          and (schedule.endDate is null or schedule.endDate >= :from)
+		      )
+		  )
 		""",
 	)
 	fun findCandidates(
+		@Param("userId") userId: UUID,
 		@Param("from") from: LocalDate,
 		@Param("toInclusive") toInclusive: LocalDate,
 	): List<FinancialSchedule>

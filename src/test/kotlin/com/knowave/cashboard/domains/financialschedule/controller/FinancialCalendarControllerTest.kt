@@ -12,6 +12,10 @@ import com.knowave.cashboard.domains.financialschedule.service.dto.FinancialCale
 import com.knowave.cashboard.domains.financialschedule.service.dto.FinancialCalendarResult
 import org.junit.jupiter.api.Test
 import org.mockito.BDDMockito.given
+import com.knowave.cashboard.support.WithAuthenticatedUser
+import com.knowave.cashboard.common.config.ClockConfig
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
+import org.springframework.context.annotation.Import
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.test.context.bean.override.mockito.MockitoBean
@@ -22,6 +26,13 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.time.LocalDate
 import java.util.UUID
 
+// ponytail: 슬라이스 테스트는 매핑·검증을 검증한다. 보안 체인은 전용 테스트의 몫이므로
+// 필터를 끈다 — @WebMvcTest는 우리 SecurityConfig를 로드하지 않고 Boot 기본 설정을
+// 쓰기 때문에 CSRF가 켜져 비-GET이 403을 받는다. @AuthenticationPrincipal은
+// SecurityContextHolder에서 해석되므로 필터를 꺼도 @WithAuthenticatedUser가 동작한다.
+@AutoConfigureMockMvc(addFilters = false)
+@WithAuthenticatedUser
+@Import(ClockConfig::class)
 @WebMvcTest(FinancialCalendarController::class)
 class FinancialCalendarControllerTest {
 
@@ -33,9 +44,11 @@ class FinancialCalendarControllerTest {
 	@MockitoBean
 	private lateinit var financialCalendarService: FinancialCalendarService
 
+	private val tempUserId = UUID.fromString("00000000-0000-0000-0000-000000000000")
+
 	@Test
 	fun `미래 월 일정 요약 예상 잔액을 응답 계약으로 반환한다`() {
-		given(financialCalendarService.getCalendar(2026, 10)).willReturn(calendarResult())
+		given(financialCalendarService.getCalendar(tempUserId, 2026, 10)).willReturn(calendarResult())
 
 		mockMvc.perform(get("/financial-calendar").param("year", "2026").param("month", "10"))
 			.andExpect(status().isOk)
@@ -76,7 +89,7 @@ class FinancialCalendarControllerTest {
 
 	@Test
 	fun `과거 월은 projection null을 그대로 반환한다`() {
-		given(financialCalendarService.getCalendar(2026, 8)).willReturn(
+		given(financialCalendarService.getCalendar(tempUserId, 2026, 8)).willReturn(
 			calendarResult().copy(year = 2026, month = 8, projection = null),
 		)
 
@@ -112,7 +125,7 @@ class FinancialCalendarControllerTest {
 
 	@Test
 	fun `projection 범위 초과는 PROJECTION_RANGE_EXCEEDED 400을 반환한다`() {
-		given(financialCalendarService.getCalendar(2076, 10)).willThrow(ProjectionRangeExceededException(601))
+		given(financialCalendarService.getCalendar(tempUserId, 2076, 10)).willThrow(ProjectionRangeExceededException(601))
 
 		mockMvc.perform(get("/financial-calendar").param("year", "2076").param("month", "10"))
 			.andExpect(status().isBadRequest)

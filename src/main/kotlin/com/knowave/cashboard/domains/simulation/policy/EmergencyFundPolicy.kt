@@ -1,5 +1,6 @@
 package com.knowave.cashboard.domains.simulation.policy
 
+import com.knowave.cashboard.common.exception.InvalidLoanRepaymentConditionException
 import com.knowave.cashboard.domains.simulation.context.LiquidityContext
 import org.springframework.stereotype.Component
 
@@ -62,8 +63,16 @@ class EmergencyFundPolicy {
 		requestedPrepaymentAmount: Long,
 		maximumRepaymentAmount: Long,
 	): LiquidityAssessment {
-		require(requestedPrepaymentAmount >= 0L)
-		require(maximumRepaymentAmount >= 0L)
+		if (requestedPrepaymentAmount < 0L) {
+			throw InvalidLoanRepaymentConditionException(
+				"Requested prepayment amount must not be negative. requestedPrepaymentAmount=$requestedPrepaymentAmount",
+			)
+		}
+		if (maximumRepaymentAmount < 0L) {
+			throw InvalidLoanRepaymentConditionException(
+				"Maximum repayment amount must not be negative. maximumRepaymentAmount=$maximumRepaymentAmount",
+			)
+		}
 		val cashEquivalent = context.liquidAssetAmount + context.emergencyAssetAmount
 		val safeLimit = minOf(
 			context.liquidAssetAmount,

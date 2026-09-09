@@ -10,21 +10,24 @@ class SavingRecordRepositoryImpl(
 ) : SavingRecordRepository {
 	override fun save(savingRecord: SavingRecord): SavingRecord = savingRecordJpaRepository.save(savingRecord)
 
-	override fun findById(id: UUID): SavingRecord? = savingRecordJpaRepository.findById(id).orElse(null)
+	override fun findByIdAndUserId(id: UUID, userId: UUID): SavingRecord? =
+		savingRecordJpaRepository.findByIdAndUserId(id, userId)
 
-	override fun findByTargetMonth(targetMonth: String): SavingRecord? =
-		savingRecordJpaRepository.findByTargetMonth(targetMonth)
+	override fun findByTargetMonthAndUserId(targetMonth: String, userId: UUID): SavingRecord? =
+		savingRecordJpaRepository.findByTargetMonthAndUserId(targetMonth, userId)
 
-	override fun findAllByTargetMonthBetweenOrderByTargetMonthDesc(
+	override fun findAllByTargetMonthBetweenAndUserIdOrderByTargetMonthDesc(
 		fromTargetMonth: String,
 		toTargetMonth: String,
-	): List<SavingRecord> = savingRecordJpaRepository.findAllByTargetMonthBetweenOrderByTargetMonthDesc(
+		userId: UUID,
+	): List<SavingRecord> = savingRecordJpaRepository.findAllByTargetMonthBetweenAndUserIdOrderByTargetMonthDesc(
 		fromTargetMonth = fromTargetMonth,
 		toTargetMonth = toTargetMonth,
+		userId = userId,
 	)
 
-	override fun existsByTargetMonth(targetMonth: String): Boolean =
-		savingRecordJpaRepository.existsByTargetMonth(targetMonth)
+	override fun existsByTargetMonthAndUserId(targetMonth: String, userId: UUID): Boolean =
+		savingRecordJpaRepository.existsByTargetMonthAndUserId(targetMonth, userId)
 
 	override fun delete(savingRecord: SavingRecord) {
 		savingRecordJpaRepository.delete(savingRecord)

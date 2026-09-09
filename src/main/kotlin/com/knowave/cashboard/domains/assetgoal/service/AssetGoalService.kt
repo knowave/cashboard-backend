@@ -12,15 +12,19 @@ import com.knowave.cashboard.domains.assetgoal.service.dto.UpdateSavingRecordCom
 import java.util.UUID
 
 interface AssetGoalService {
-	fun createAssetGoal(command: CreateAssetGoalCommand): AssetGoalDetailResult
-	fun getAssetGoalSummaries(savingPeriodMonths: Int): List<AssetGoalSummaryResult>
-	fun getAssetGoalDetail(assetGoalId: UUID, savingPeriodMonths: Int): AssetGoalDetailResult
-	fun updateAssetGoal(assetGoalId: UUID, command: UpdateAssetGoalCommand): AssetGoalDetailResult
-	fun deleteAssetGoal(assetGoalId: UUID): Boolean
-	fun simulateAssetGoal(assetGoalId: UUID, command: AssetGoalSimulationCommand): AssetGoalSimulationResult
-	fun recordMonthlySaving(command: CreateSavingRecordCommand): SavingRecordResult
-	fun getMonthlySavingRecords(periodMonths: Int): List<SavingRecordResult>
-	fun getMonthlySavingRecord(targetMonth: String): SavingRecordResult
-	fun updateMonthlySaving(id: UUID, command: UpdateSavingRecordCommand): SavingRecordResult
-	fun deleteMonthlySaving(id: UUID): Boolean
+	fun createAssetGoal(userId: UUID, command: CreateAssetGoalCommand): AssetGoalDetailResult
+	fun getAssetGoalSummaries(userId: UUID, savingPeriodMonths: Int): List<AssetGoalSummaryResult>
+	fun getAssetGoalDetail(userId: UUID, assetGoalId: UUID, savingPeriodMonths: Int): AssetGoalDetailResult
+	fun updateAssetGoal(userId: UUID, assetGoalId: UUID, command: UpdateAssetGoalCommand): AssetGoalDetailResult
+	fun deleteAssetGoal(userId: UUID, assetGoalId: UUID): Boolean
+	fun simulateAssetGoal(
+		userId: UUID,
+		assetGoalId: UUID,
+		command: AssetGoalSimulationCommand,
+	): AssetGoalSimulationResult
+	fun recordMonthlySaving(userId: UUID, command: CreateSavingRecordCommand): SavingRecordResult
+	fun getMonthlySavingRecords(userId: UUID, periodMonths: Int): List<SavingRecordResult>
+	fun getMonthlySavingRecord(userId: UUID, targetMonth: String): SavingRecordResult
+	fun updateMonthlySaving(userId: UUID, id: UUID, command: UpdateSavingRecordCommand): SavingRecordResult
+	fun deleteMonthlySaving(userId: UUID, id: UUID): Boolean
 }

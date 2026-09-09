@@ -5,9 +5,9 @@ import java.util.UUID
 
 interface MonthlyBudgetRepository {
 	fun save(monthlyBudget: MonthlyBudget): MonthlyBudget
-	fun findById(id: UUID): MonthlyBudget?
-	fun findByIdForUpdate(id: UUID): MonthlyBudget?
-	fun findByTargetMonth(targetMonth: String): MonthlyBudget?
-	fun existsById(id: UUID): Boolean
-	fun existsByTargetMonth(targetMonth: String): Boolean
+	fun findByIdAndUserId(id: UUID, userId: UUID): MonthlyBudget?
+	fun findByIdForUpdate(id: UUID, userId: UUID): MonthlyBudget?
+	fun findByTargetMonthAndUserId(targetMonth: String, userId: UUID): MonthlyBudget?
+	fun existsByIdAndUserId(id: UUID, userId: UUID): Boolean
+	fun existsByTargetMonthAndUserId(targetMonth: String, userId: UUID): Boolean
 }

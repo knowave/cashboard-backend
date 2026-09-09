@@ -5,10 +5,14 @@ import com.knowave.cashboard.domains.assetgoal.service.dto.UpdateSavingRecordCom
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
+import java.util.UUID
 
 @Entity
 @Table(name = "saving_records")
 class SavingRecord(
+	@Column(name = "user_id", nullable = false, updatable = false)
+	val userId: UUID,
+
 	@Column(name = "target_month", nullable = false, unique = true, length = 7)
 	var targetMonth: String,
 

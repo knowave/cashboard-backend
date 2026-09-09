@@ -124,7 +124,7 @@ private class ShortageOccurrenceSource : CalendarOccurrenceSource {
 	var occurrences: List<ScheduleOccurrence> = emptyList()
 	var requestedRange: Pair<LocalDate, LocalDate>? = null
 
-	override fun findOccurrences(from: LocalDate, toInclusive: LocalDate): List<ScheduleOccurrence> {
+	override fun findOccurrences(userId: UUID, from: LocalDate, toInclusive: LocalDate): List<ScheduleOccurrence> {
 		requestedRange = from to toInclusive
 		return occurrences
 	}
@@ -133,21 +133,21 @@ private class ShortageOccurrenceSource : CalendarOccurrenceSource {
 private class FixedLiquidityBalanceProvider : LiquidityBalanceProvider {
 	var balance: Long = 100L
 
-	override fun getCurrentLiquidBalance(): Long = balance
+	override fun getCurrentLiquidBalance(userId: UUID): Long = balance
 }
 
 private class InMemoryBalanceShortageStateRepository : BalanceShortageStateRepository {
 	private var state: BalanceShortageState? = null
 
-	override fun findByScopeKeyForUpdate(scopeKey: String): BalanceShortageState? = state?.takeIf { it.scopeKey == scopeKey }
+	override fun findByUserIdForUpdate(userId: UUID): BalanceShortageState? = state?.takeIf { it.userId == userId }
 
 	override fun save(state: BalanceShortageState): BalanceShortageState {
 		this.state = state
 		return state
 	}
 
-	override fun transition(scopeKey: String, shortageDate: LocalDate?): BalanceShortageTransition {
-		val current = state ?: BalanceShortageState(scopeKey = scopeKey).also { state = it }
+	override fun transition(userId: UUID, shortageDate: LocalDate?): BalanceShortageTransition {
+		val current = state ?: BalanceShortageState(userId = userId).also { state = it }
 		if (shortageDate == null) {
 			current.shortageDate = null
 			return BalanceShortageTransition(current.episode, false)
@@ -162,7 +162,7 @@ private class InMemoryBalanceShortageStateRepository : BalanceShortageStateRepos
 private class ShortageGenerationService : NotificationGenerationService {
 	val created = mutableListOf<NewNotification>()
 
-	override fun createIfEnabled(candidate: NewNotification): Boolean {
+	override fun createIfEnabled(userId: UUID, candidate: NewNotification): Boolean {
 		if (created.any { it.deduplicationKey == candidate.deduplicationKey }) return false
 		created += candidate
 		return true

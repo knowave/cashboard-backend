@@ -6,10 +6,12 @@ import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
 import java.time.LocalDate
+import java.util.UUID
 
 @Entity
 @Table(name = "financial_schedules")
 class FinancialSchedule private constructor(
+	userId: UUID,
 	scheduleType: String,
 	title: String,
 	amount: Long,
@@ -21,6 +23,10 @@ class FinancialSchedule private constructor(
 	startDate: LocalDate?,
 	endDate: LocalDate?,
 ) : BaseEntity() {
+	@Column(name = "user_id", nullable = false)
+	final var userId: UUID = userId
+		private set
+
 	@Column(name = "schedule_type", nullable = false, length = 50)
 	final var scheduleType: String = scheduleType
 		private set
@@ -106,6 +112,7 @@ class FinancialSchedule private constructor(
 
 	companion object {
 		fun create(
+			userId: UUID,
 			type: ScheduleType,
 			title: String,
 			amount: Long,
@@ -114,6 +121,7 @@ class FinancialSchedule private constructor(
 		): FinancialSchedule {
 			validateTitleAndAmount(title, amount)
 			return FinancialSchedule(
+				userId = userId,
 				scheduleType = type.name,
 				title = title.trim(),
 				amount = amount,

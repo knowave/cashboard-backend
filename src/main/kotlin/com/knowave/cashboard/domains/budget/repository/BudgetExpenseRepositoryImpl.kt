@@ -11,11 +11,14 @@ class BudgetExpenseRepositoryImpl(
 	override fun save(budgetExpense: BudgetExpense): BudgetExpense =
 		budgetExpenseJpaRepository.save(budgetExpense)
 
-	override fun findById(id: UUID): BudgetExpense? =
-		budgetExpenseJpaRepository.findById(id).orElse(null)
+	override fun findByIdAndUserId(id: UUID, userId: UUID): BudgetExpense? =
+		budgetExpenseJpaRepository.findByIdAndUserId(id, userId)
 
-	override fun findAllByMonthlyBudgetIdOrderBySpentAtDesc(monthlyBudgetId: UUID): List<BudgetExpense> =
-		budgetExpenseJpaRepository.findAllByMonthlyBudgetIdOrderBySpentAtDesc(monthlyBudgetId)
+	override fun findAllByMonthlyBudgetIdAndUserIdOrderBySpentAtDesc(
+		monthlyBudgetId: UUID,
+		userId: UUID,
+	): List<BudgetExpense> =
+		budgetExpenseJpaRepository.findAllByMonthlyBudgetIdAndUserIdOrderBySpentAtDesc(monthlyBudgetId, userId)
 
 	override fun delete(budgetExpense: BudgetExpense) =
 		budgetExpenseJpaRepository.delete(budgetExpense)

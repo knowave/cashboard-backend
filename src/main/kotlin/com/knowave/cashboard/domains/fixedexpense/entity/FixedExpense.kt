@@ -5,10 +5,14 @@ import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
 import java.time.YearMonth
+import java.util.UUID
 
 @Entity
 @Table(name = "fixed_expenses")
 class FixedExpense(
+	@Column(name = "user_id", nullable = false)
+	var userId: UUID,
+
 	@Column(name = "name", nullable = false)
 	var name: String,
 

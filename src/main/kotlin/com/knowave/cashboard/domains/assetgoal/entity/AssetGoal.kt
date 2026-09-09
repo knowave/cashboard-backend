@@ -6,10 +6,14 @@ import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
 import java.time.LocalDate
+import java.util.UUID
 
 @Entity
 @Table(name = "asset_goals")
 class AssetGoal(
+	@Column(name = "user_id", nullable = false, updatable = false)
+	val userId: UUID,
+
 	@Column(name = "name", nullable = false, length = 100)
 	var name: String,
 

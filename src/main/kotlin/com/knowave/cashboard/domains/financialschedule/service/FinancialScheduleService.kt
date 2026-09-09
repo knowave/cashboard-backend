@@ -6,9 +6,9 @@ import com.knowave.cashboard.domains.financialschedule.service.dto.PatchFinancia
 import java.util.UUID
 
 interface FinancialScheduleService {
-	fun create(command: CreateFinancialScheduleCommand): FinancialScheduleResult
-	fun get(id: UUID): FinancialScheduleResult
-	fun getAll(): List<FinancialScheduleResult>
-	fun patch(id: UUID, command: PatchFinancialScheduleCommand): FinancialScheduleResult
-	fun delete(id: UUID)
+	fun create(userId: UUID, command: CreateFinancialScheduleCommand): FinancialScheduleResult
+	fun get(userId: UUID, id: UUID): FinancialScheduleResult
+	fun getAll(userId: UUID): List<FinancialScheduleResult>
+	fun patch(userId: UUID, id: UUID, command: PatchFinancialScheduleCommand): FinancialScheduleResult
+	fun delete(userId: UUID, id: UUID)
 }

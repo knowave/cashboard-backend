@@ -12,17 +12,19 @@ import java.time.Instant
 import java.util.UUID
 
 interface NotificationJpaRepository : JpaRepository<Notification, UUID> {
-	fun findAllByReadAtIsNull(pageable: Pageable): Page<Notification>
-	fun findAllByReadAtIsNotNull(pageable: Pageable): Page<Notification>
-	fun countByReadAtIsNull(): Long
+	fun findByIdAndUserId(id: UUID, userId: UUID): Notification?
+	fun findAllByUserIdAndReadAtIsNull(userId: UUID, pageable: Pageable): Page<Notification>
+	fun findAllByUserIdAndReadAtIsNotNull(userId: UUID, pageable: Pageable): Page<Notification>
+	fun findAllByUserId(userId: UUID, pageable: Pageable): Page<Notification>
+	fun countByUserIdAndReadAtIsNull(userId: UUID): Long
 
 	@Modifying(clearAutomatically = true, flushAutomatically = true)
 	@Transactional
-	@Query("update Notification notification set notification.readAt = :now where notification.readAt is null")
-	fun markAllRead(@Param("now") now: Instant): Int
+	@Query("update Notification notification set notification.readAt = :now where notification.userId = :userId and notification.readAt is null")
+	fun markAllRead(@Param("userId") userId: UUID, @Param("now") now: Instant): Int
 
 	@Modifying(clearAutomatically = true, flushAutomatically = true)
 	@Transactional
-	@Query("update Notification notification set notification.readAt = :now where notification.id = :id and notification.readAt is null")
-	fun markReadIfUnread(@Param("id") id: UUID, @Param("now") now: Instant): Int
+	@Query("update Notification notification set notification.readAt = :now where notification.id = :id and notification.userId = :userId and notification.readAt is null")
+	fun markReadIfUnread(@Param("id") id: UUID, @Param("userId") userId: UUID, @Param("now") now: Instant): Int
 }

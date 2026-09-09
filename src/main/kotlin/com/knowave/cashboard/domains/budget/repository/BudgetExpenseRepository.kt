@@ -5,7 +5,7 @@ import java.util.UUID
 
 interface BudgetExpenseRepository {
 	fun save(budgetExpense: BudgetExpense): BudgetExpense
-	fun findById(id: UUID): BudgetExpense?
-	fun findAllByMonthlyBudgetIdOrderBySpentAtDesc(monthlyBudgetId: UUID): List<BudgetExpense>
+	fun findByIdAndUserId(id: UUID, userId: UUID): BudgetExpense?
+	fun findAllByMonthlyBudgetIdAndUserIdOrderBySpentAtDesc(monthlyBudgetId: UUID, userId: UUID): List<BudgetExpense>
 	fun delete(budgetExpense: BudgetExpense)
 }

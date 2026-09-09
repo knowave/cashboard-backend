@@ -13,6 +13,6 @@ class BudgetNotificationEventListener(
 ) {
 	@EventListener
 	fun on(event: BudgetUsageChangedEvent) {
-		thresholdService.process(policy.evaluate(event), event.occurredAt)
+		thresholdService.process(event.userId, policy.evaluate(event), event.occurredAt)
 	}
 }

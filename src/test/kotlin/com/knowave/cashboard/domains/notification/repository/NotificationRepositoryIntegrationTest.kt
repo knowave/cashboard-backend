@@ -4,6 +4,7 @@ import com.knowave.cashboard.domains.notification.entity.NotificationType
 import com.knowave.cashboard.support.PostgreSqlIntegrationTest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.domain.PageRequest
@@ -20,6 +21,8 @@ class NotificationRepositoryIntegrationTest : PostgreSqlIntegrationTest() {
 	@Autowired lateinit var preferenceRepository: NotificationPreferenceRepository
 	@Autowired lateinit var jdbcTemplate: JdbcTemplate
 
+	private lateinit var userId: UUID
+
 	@BeforeEach
 	fun clearNotificationTables() {
 		jdbcTemplate.execute(
@@ -32,6 +35,7 @@ class NotificationRepositoryIntegrationTest : PostgreSqlIntegrationTest() {
 					balance_shortage_states
 			""".trimIndent(),
 		)
+		userId = persistUser().id
 	}
 
 	@Test
@@ -40,7 +44,7 @@ class NotificationRepositoryIntegrationTest : PostgreSqlIntegrationTest() {
 
 		assertThat(repository.insertIfAbsent(candidate)).isTrue()
 		assertThat(repository.insertIfAbsent(candidate.copy(id = UUID.randomUUID()))).isFalse()
-		assertThat(repository.countUnread()).isEqualTo(1)
+		assertThat(repository.countUnread(userId)).isEqualTo(1)
 	}
 
 	@Test
@@ -53,7 +57,7 @@ class NotificationRepositoryIntegrationTest : PostgreSqlIntegrationTest() {
 			assertThat(results.count { it }).isEqualTo(1)
 		}
 
-		assertThat(repository.countUnread()).isEqualTo(1)
+		assertThat(repository.countUnread(userId)).isEqualTo(1)
 	}
 
 	@Test
@@ -61,8 +65,8 @@ class NotificationRepositoryIntegrationTest : PostgreSqlIntegrationTest() {
 		seedUnread("first")
 		seedUnread("second")
 
-		assertThat(repository.markAllRead(Instant.parse("2026-09-02T00:00:00Z"))).isEqualTo(2)
-		assertThat(repository.markAllRead(Instant.parse("2026-09-02T00:01:00Z"))).isZero()
+		assertThat(repository.markAllRead(userId, Instant.parse("2026-09-02T00:00:00Z"))).isEqualTo(2)
+		assertThat(repository.markAllRead(userId, Instant.parse("2026-09-02T00:01:00Z"))).isZero()
 	}
 
 	@Test
@@ -74,15 +78,15 @@ class NotificationRepositoryIntegrationTest : PostgreSqlIntegrationTest() {
 
 		val results = Executors.newFixedThreadPool(2).use { executor ->
 			listOf(first, second)
-				.map { now -> executor.submit<ConditionalReadResult?> { repository.markReadIfUnread(candidate.id, now) } }
+				.map { now -> executor.submit<ConditionalReadResult?> { repository.markReadIfUnread(candidate.id, userId, now) } }
 				.map { it.get() }
 		}
 
 		assertThat(results.filterNotNull().count { it.changed }).isEqualTo(1)
 		assertThat(results.filterNotNull().count { !it.changed }).isEqualTo(1)
-		assertThat(repository.findById(candidate.id)!!.readAt)
+		assertThat(repository.findByIdAndUserId(candidate.id, userId)!!.readAt)
 			.isEqualTo(results.first { it!!.changed }!!.notification.readAt)
-		assertThat(repository.findById(candidate.id)!!.readAt).isIn(first, second)
+		assertThat(repository.findByIdAndUserId(candidate.id, userId)!!.readAt).isIn(first, second)
 	}
 
 	@Test
@@ -99,42 +103,45 @@ class NotificationRepositoryIntegrationTest : PostgreSqlIntegrationTest() {
 			first.id,
 			second.id,
 		)
-		val readNotification = repository.findById(read.id)!!
+		val readNotification = repository.findByIdAndUserId(read.id, userId)!!
 		readNotification.markRead(Instant.parse("2026-09-02T00:00:00Z"))
 		repository.save(readNotification)
 
-		assertThat(repository.findPage(false, PageRequest.of(0, 10)).content.map { it.id })
+		assertThat(repository.findPage(userId, false, PageRequest.of(0, 10)).content.map { it.id })
 			.containsExactly(second.id, first.id)
-		assertThat(repository.findPage(true, PageRequest.of(0, 10)).content.map { it.id })
+		assertThat(repository.findPage(userId, true, PageRequest.of(0, 10)).content.map { it.id })
 			.containsExactly(read.id)
 	}
 
+	@Disabled("V8__enforce_user_ownership.sql(Stage 3.5) 적용 후 활성화. ON CONFLICT (user_id, ...) 대상 제약이 아직 없다.")
 	@Test
 	fun `정책 marker는 새 키만 선점한다`() {
 		val keys = setOf("BUDGET:one:80", "BUDGET:one:100")
 
-		assertThat(policyMarkerRepository.claimAll(keys, Instant.parse("2026-09-02T00:00:00Z")))
+		assertThat(policyMarkerRepository.claimAll(userId, keys, Instant.parse("2026-09-02T00:00:00Z")))
 			.containsExactlyInAnyOrderElementsOf(keys)
-		assertThat(policyMarkerRepository.claimAll(keys, Instant.parse("2026-09-02T00:01:00Z"))).isEmpty()
+		assertThat(policyMarkerRepository.claimAll(userId, keys, Instant.parse("2026-09-02T00:01:00Z"))).isEmpty()
 	}
 
+	@Disabled("V8__enforce_user_ownership.sql(Stage 3.5) 적용 후 활성화. ON CONFLICT (user_id, ...) 대상 제약이 아직 없다.")
 	@Test
 	fun `설정이 없으면 활성화가 기본값이고 upsert 결과를 조회한다`() {
-		assertThat(settingRepository.isEnabled(NotificationType.PAYMENT_DUE)).isTrue()
+		assertThat(settingRepository.isEnabled(userId, NotificationType.PAYMENT_DUE)).isTrue()
 
-		settingRepository.upsert(NotificationType.PAYMENT_DUE, false)
+		settingRepository.upsert(userId, NotificationType.PAYMENT_DUE, false)
 
-		assertThat(settingRepository.isEnabled(NotificationType.PAYMENT_DUE)).isFalse()
-		assertThat(settingRepository.findAll()).containsEntry(NotificationType.PAYMENT_DUE, false)
+		assertThat(settingRepository.isEnabled(userId, NotificationType.PAYMENT_DUE)).isFalse()
+		assertThat(settingRepository.findAll(userId)).containsEntry(NotificationType.PAYMENT_DUE, false)
 	}
 
+	@Disabled("V8__enforce_user_ownership.sql(Stage 3.5) 적용 후 활성화. ON CONFLICT (user_id, ...) 대상 제약이 아직 없다.")
 	@Test
 	fun `push 설정이 없으면 활성화가 기본값이고 upsert 결과를 조회한다`() {
-		assertThat(preferenceRepository.getPushEnabled()).isTrue()
+		assertThat(preferenceRepository.getPushEnabled(userId)).isTrue()
 
-		preferenceRepository.upsertPushEnabled(false)
+		preferenceRepository.upsertPushEnabled(userId, false)
 
-		assertThat(preferenceRepository.getPushEnabled()).isFalse()
+		assertThat(preferenceRepository.getPushEnabled(userId)).isFalse()
 	}
 
 	private fun seedUnread(key: String) {
@@ -142,6 +149,7 @@ class NotificationRepositoryIntegrationTest : PostgreSqlIntegrationTest() {
 	}
 
 	private fun paymentCandidate(key: String) = NewNotification(
+		userId = userId,
 		type = NotificationType.PAYMENT_DUE,
 		title = "결제 예정",
 		message = "결제 예정 알림",

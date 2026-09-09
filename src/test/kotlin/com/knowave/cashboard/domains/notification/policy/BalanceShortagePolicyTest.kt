@@ -8,9 +8,11 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.time.LocalDate
+import java.util.UUID
 
 class BalanceShortagePolicyTest {
 	private val policy = BalanceShortagePolicy()
+	private val userId = UUID.randomUUID()
 
 	@Test
 	fun `30일 중 최초 음수 예상 잔액일을 선택한다`() {
@@ -31,6 +33,7 @@ class BalanceShortagePolicyTest {
 			shortage = requireNotNull(policy.findFirstShortage(projectionWithBalances(-10L))),
 			episode = 2,
 			scheduledAt = Instant.parse("2026-09-02T00:00:00Z"),
+			userId = userId,
 		)
 
 		assertThat(notification.type).isEqualTo(NotificationType.BALANCE_SHORTAGE)

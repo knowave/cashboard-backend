@@ -6,6 +6,7 @@ import com.knowave.cashboard.domains.notification.repository.NewNotification
 import org.springframework.stereotype.Component
 import java.time.Instant
 import java.time.LocalDate
+import java.util.UUID
 
 data class BalanceShortage(
 	val date: LocalDate,
@@ -27,7 +28,8 @@ class BalanceShortagePolicy {
 		.firstOrNull { it.expectedClosingBalance < 0 }
 		?.let { BalanceShortage(it.date, it.expectedClosingBalance) }
 
-	fun toNotification(shortage: BalanceShortage, episode: Long, scheduledAt: Instant): NewNotification = NewNotification(
+	fun toNotification(shortage: BalanceShortage, episode: Long, scheduledAt: Instant, userId: UUID): NewNotification = NewNotification(
+		userId = userId,
 		type = NotificationType.BALANCE_SHORTAGE,
 		title = "예상 잔액이 부족해요",
 		message = "${shortage.date}에 예상 잔액이 ${shortage.expectedBalance}원으로 부족할 수 있어요.",

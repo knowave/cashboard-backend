@@ -5,10 +5,12 @@ import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
 import java.time.Instant
+import java.util.UUID
 
 @Entity
 @Table(name = "notifications")
 class Notification private constructor(
+	userId: UUID,
 	type: String,
 	title: String,
 	message: String,
@@ -16,6 +18,10 @@ class Notification private constructor(
 	scheduledAt: Instant,
 	deduplicationKey: String,
 ) : BaseEntity() {
+	@Column(name = "user_id", nullable = false, updatable = false)
+	final var userId: UUID = userId
+		private set
+
 	@Column(nullable = false, length = 50)
 	final var type: String = type
 		private set
@@ -56,12 +62,14 @@ class Notification private constructor(
 
 	companion object {
 		fun create(
+			userId: UUID,
 			type: NotificationType,
 			title: String,
 			message: String,
 			scheduledAt: Instant,
 			deduplicationKey: String,
 		): Notification = Notification(
+			userId = userId,
 			type = type.name,
 			title = title,
 			message = message,

@@ -25,12 +25,14 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 class FinancialScheduleServiceImplTest {
+	private val userId = UUID.fromString("00000000-0000-0000-0000-0000000000aa")
 	private val repository = FakeFinancialScheduleRepository()
 	private val service = FinancialScheduleServiceImpl(repository)
 
 	@Test
 	fun `생성 요청의 문자열 enum을 정규화해 저장한다`() {
 		val result = service.create(
+			userId,
 			CreateFinancialScheduleCommand(
 				type = "loan",
 				title = "대출 상환",
@@ -54,6 +56,7 @@ class FinancialScheduleServiceImplTest {
 		val saved = repository.save(monthlySchedule())
 
 		val result = service.patch(
+			userId,
 			requireNotNull(saved.id),
 			PatchFinancialScheduleCommand(
 				type = PatchField.Absent,
@@ -71,45 +74,45 @@ class FinancialScheduleServiceImplTest {
 
 	@Test
 	fun `유효하지 않은 생성 enum은 사용자 입력 오류로 처리한다`() {
-		assertThatThrownBy { service.create(command(type = "UNKNOWN")) }
+		assertThatThrownBy { service.create(userId, command(type = "UNKNOWN")) }
 			.isInstanceOf(InvalidEnumValueException::class.java)
 	}
 
 	@Test
 	fun `빈 PATCH는 거부한다`() {
-		assertThatThrownBy { service.patch(UUID.randomUUID(), emptyPatch()) }
+		assertThatThrownBy { service.patch(userId, UUID.randomUUID(), emptyPatch()) }
 			.isInstanceOf(EmptyFinancialSchedulePatchException::class.java)
 	}
 
 	@Test
 	fun `PATCH의 null 필드는 거부한다`() {
-		assertThatThrownBy { service.patch(UUID.randomUUID(), patch(title = PatchField.Present(null))) }
+		assertThatThrownBy { service.patch(userId, UUID.randomUUID(), patch(title = PatchField.Present(null))) }
 			.isInstanceOf(InvalidFinancialScheduleException::class.java)
 	}
 
 	@Test
 	fun `없는 일정 조회는 NotFoundException으로 처리한다`() {
-		assertThatThrownBy { service.get(UUID.randomUUID()) }
+		assertThatThrownBy { service.get(userId, UUID.randomUUID()) }
 			.isInstanceOf(NotFoundException::class.java)
 	}
 
 	@Test
 	fun `반복 유형별 필수 필드와 금지 필드 조합을 검증한다`() {
 		assertThatThrownBy {
-			service.create(command(recurrence = RecurrenceCommand(type = "ONCE")))
+			service.create(userId, command(recurrence = RecurrenceCommand(type = "ONCE")))
 		}.isInstanceOf(InvalidRecurrenceRuleException::class.java)
 		assertThatThrownBy {
-			service.create(command(recurrence = RecurrenceCommand(
+			service.create(userId, command(recurrence = RecurrenceCommand(
 				type = "ONCE",
 				scheduledDate = LocalDate.of(2026, 9, 1),
 				dayOfMonth = 1,
 			)))
 		}.isInstanceOf(InvalidRecurrenceRuleException::class.java)
 		assertThatThrownBy {
-			service.create(command(recurrence = RecurrenceCommand(type = "MONTHLY", startDate = LocalDate.of(2026, 1, 1))))
+			service.create(userId, command(recurrence = RecurrenceCommand(type = "MONTHLY", startDate = LocalDate.of(2026, 1, 1))))
 		}.isInstanceOf(InvalidRecurrenceRuleException::class.java)
 		assertThatThrownBy {
-			service.create(command(recurrence = RecurrenceCommand(
+			service.create(userId, command(recurrence = RecurrenceCommand(
 				type = "MONTHLY",
 				scheduledDate = LocalDate.of(2026, 9, 1),
 				dayOfMonth = 1,
@@ -117,14 +120,14 @@ class FinancialScheduleServiceImplTest {
 			)))
 		}.isInstanceOf(InvalidRecurrenceRuleException::class.java)
 		assertThatThrownBy {
-			service.create(command(recurrence = RecurrenceCommand(
+			service.create(userId, command(recurrence = RecurrenceCommand(
 				type = "YEARLY",
 				dayOfMonth = 1,
 				startDate = LocalDate.of(2026, 1, 1),
 			)))
 		}.isInstanceOf(InvalidRecurrenceRuleException::class.java)
 		assertThatThrownBy {
-			service.create(command(recurrence = RecurrenceCommand(
+			service.create(userId, command(recurrence = RecurrenceCommand(
 				type = "YEARLY",
 				scheduledDate = LocalDate.of(2026, 9, 1),
 				monthOfYear = 1,
@@ -139,6 +142,7 @@ class FinancialScheduleServiceImplTest {
 		val saved = repository.save(monthlySchedule())
 
 		val result = service.patch(
+			userId,
 			requireNotNull(saved.id),
 			PatchFinancialScheduleCommand(recurrence = PatchField.Present(RecurrenceCommand(
 				type = "ONCE",
@@ -158,9 +162,9 @@ class FinancialScheduleServiceImplTest {
 	fun `없는 일정의 PATCH와 삭제는 NotFoundException으로 처리한다`() {
 		val unknownId = UUID.randomUUID()
 
-		assertThatThrownBy { service.patch(unknownId, patch(title = PatchField.Present("변경"))) }
+		assertThatThrownBy { service.patch(userId, unknownId, patch(title = PatchField.Present("변경"))) }
 			.isInstanceOf(NotFoundException::class.java)
-		assertThatThrownBy { service.delete(unknownId) }
+		assertThatThrownBy { service.delete(userId, unknownId) }
 			.isInstanceOf(NotFoundException::class.java)
 	}
 
@@ -168,9 +172,9 @@ class FinancialScheduleServiceImplTest {
 	fun `삭제한 일정은 다시 조회할 수 없다`() {
 		val saved = repository.save(monthlySchedule())
 
-		service.delete(requireNotNull(saved.id))
+		service.delete(userId, requireNotNull(saved.id))
 
-		assertThatThrownBy { service.get(requireNotNull(saved.id)) }
+		assertThatThrownBy { service.get(userId, requireNotNull(saved.id)) }
 			.isInstanceOf(NotFoundException::class.java)
 	}
 
@@ -183,7 +187,7 @@ class FinancialScheduleServiceImplTest {
 		repository.save(monthlySchedule().apply { assignBaseFields(secondId, LocalDateTime.of(2026, 9, 1, 0, 0)) })
 		repository.save(monthlySchedule().apply { assignBaseFields(latestId, LocalDateTime.of(2026, 9, 2, 0, 0)) })
 
-		assertThat(service.getAll().map { it.id }).containsExactly(latestId, firstId, secondId)
+		assertThat(service.getAll(userId).map { it.id }).containsExactly(latestId, firstId, secondId)
 	}
 
 	@Test
@@ -191,7 +195,7 @@ class FinancialScheduleServiceImplTest {
 		val saved = repository.save(monthlySchedule())
 		saved.assignStringField("scheduleType", "BROKEN")
 
-		assertThatThrownBy { service.get(requireNotNull(saved.id)) }
+		assertThatThrownBy { service.get(userId, requireNotNull(saved.id)) }
 			.isInstanceOf(FinancialScheduleDataIntegrityException::class.java)
 			.hasCauseInstanceOf(InvalidEnumValueException::class.java)
 			.extracting("status")
@@ -218,6 +222,7 @@ class FinancialScheduleServiceImplTest {
 	private fun patch(title: PatchField<String>) = PatchFinancialScheduleCommand(title = title)
 
 	private fun monthlySchedule() = FinancialSchedule.create(
+		userId = userId,
 		type = ScheduleType.LOAN,
 		title = "대출 상환",
 		amount = 475_000L,
@@ -237,12 +242,15 @@ private class FakeFinancialScheduleRepository : FinancialScheduleRepository {
 		return schedule
 	}
 
-	override fun findById(id: UUID): FinancialSchedule? = schedules[id]
+	override fun findByIdAndUserId(id: UUID, userId: UUID): FinancialSchedule? =
+		schedules[id]?.takeIf { it.userId == userId }
 
-	override fun findAllOrderByCreatedAtDesc(): List<FinancialSchedule> =
-		schedules.values.sortedWith(compareByDescending<FinancialSchedule> { it.createdAt }.thenBy { it.id })
+	override fun findAllOrderByCreatedAtDesc(userId: UUID): List<FinancialSchedule> =
+		schedules.values.filter { it.userId == userId }
+			.sortedWith(compareByDescending<FinancialSchedule> { it.createdAt }.thenBy { it.id })
 
-	override fun findCandidates(from: LocalDate, toInclusive: LocalDate): List<FinancialSchedule> = emptyList()
+	override fun findCandidates(userId: UUID, from: LocalDate, toInclusive: LocalDate): List<FinancialSchedule> =
+		emptyList()
 
 	override fun delete(schedule: FinancialSchedule) {
 		schedules.remove(schedule.id)

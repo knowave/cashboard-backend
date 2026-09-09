@@ -15,11 +15,11 @@ class NotificationCommandServiceImpl(
 	private val notificationRepository: NotificationRepository,
 	private val clock: Clock,
 ) : NotificationCommandService {
-	override fun markRead(id: UUID): NotificationResult {
-		val result = notificationRepository.markReadIfUnread(id, clock.instant())
+	override fun markRead(userId: UUID, id: UUID): NotificationResult {
+		val result = notificationRepository.markReadIfUnread(id, userId, clock.instant())
 			?: throw NotificationNotFoundException(id)
 		return result.notification.toResult()
 	}
 
-	override fun markAllRead(): Int = notificationRepository.markAllRead(Instant.now(clock))
+	override fun markAllRead(userId: UUID): Int = notificationRepository.markAllRead(userId, Instant.now(clock))
 }

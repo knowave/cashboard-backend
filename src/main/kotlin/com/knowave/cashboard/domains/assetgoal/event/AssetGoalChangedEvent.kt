@@ -4,6 +4,7 @@ import java.time.Instant
 import java.util.UUID
 
 data class AssetGoalChangedEvent(
+	val userId: UUID,
 	val goalId: UUID,
 	val goalName: String,
 	val previousTargetAmount: Long,

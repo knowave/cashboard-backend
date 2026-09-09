@@ -19,6 +19,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 class FinancialCalendarServiceImplTest {
+	private val userId = UUID.fromString("00000000-0000-0000-0000-0000000000aa")
 	private val source = FakeCalendarOccurrenceSource()
 	private val liquidity = FakeLiquidityBalanceProvider()
 	private val clock = Clock.fixed(Instant.parse("2026-09-15T00:00:00Z"), ZoneOffset.UTC)
@@ -32,7 +33,7 @@ class FinancialCalendarServiceImplTest {
 	fun `과거 월은 전체 합계만 제공하고 유동 잔액을 읽지 않는다`() {
 		source.defaultOccurrences = listOf(expense(LocalDate.of(2026, 8, 7), 750_000L))
 
-		val result = service.getCalendar(2026, 8)
+		val result = service.getCalendar(userId, 2026, 8)
 
 		assertThat(result.summary).isEqualTo(CashFlowSummary(0L, 750_000L, -750_000L))
 		assertThat(result.projection).isNull()
@@ -48,7 +49,7 @@ class FinancialCalendarServiceImplTest {
 			expense(LocalDate.of(2026, 9, 25), 475_000L),
 		)
 
-		val result = service.getCalendar(2026, 9)
+		val result = service.getCalendar(userId, 2026, 9)
 
 		assertThat(result.summary).isEqualTo(CashFlowSummary(3_100_000L, 995_000L, 2_105_000L))
 		assertThat(result.projection!!.projectionStartDate).isEqualTo(LocalDate.of(2026, 9, 16))
@@ -68,7 +69,7 @@ class FinancialCalendarServiceImplTest {
 		liquidity.balance = 1_200_000L
 		source.defaultOccurrences = listOf(expense(LocalDate.of(2026, 9, 30), 500_000L))
 
-		val result = lastDayService.getCalendar(2026, 9)
+		val result = lastDayService.getCalendar(userId, 2026, 9)
 
 		assertThat(result.projection!!.projectionStartDate).isEqualTo(LocalDate.of(2026, 10, 1))
 		assertThat(result.projection!!.dailyBalances).isEmpty()
@@ -83,7 +84,7 @@ class FinancialCalendarServiceImplTest {
 		source.resultsByRange[LocalDate.of(2026, 10, 1) to LocalDate.of(2026, 10, 31)] =
 			listOf(income(LocalDate.of(2026, 10, 5), 3_100_000L))
 
-		val result = service.getCalendar(2026, 10)
+		val result = service.getCalendar(userId, 2026, 10)
 
 		assertThat(result.projection!!.projectionStartBalance).isEqualTo(725_000L)
 		assertThat(result.projection!!.expectedClosingBalance).isEqualTo(3_825_000L)
@@ -98,7 +99,7 @@ class FinancialCalendarServiceImplTest {
 		)
 		liquidity.balance = 1_200_000L
 
-		val result = lastDayService.getCalendar(2026, 10)
+		val result = lastDayService.getCalendar(userId, 2026, 10)
 
 		assertThat(result.projection!!.projectionStartBalance).isEqualTo(1_200_000L)
 		assertThat(source.calls).containsExactly(LocalDate.of(2026, 10, 1) to LocalDate.of(2026, 10, 31))
@@ -108,7 +109,7 @@ class FinancialCalendarServiceImplTest {
 	fun `일정이 없는 미래 월은 시작 잔액을 마감 잔액으로 유지한다`() {
 		liquidity.balance = 1_200_000L
 
-		val result = service.getCalendar(2026, 10)
+		val result = service.getCalendar(userId, 2026, 10)
 
 		assertThat(result.items).isEmpty()
 		assertThat(result.summary).isEqualTo(CashFlowSummary(0L, 0L, 0L))
@@ -121,17 +122,17 @@ class FinancialCalendarServiceImplTest {
 		val allowed = current.plusMonths(600)
 		val rejected = current.plusMonths(601)
 
-		assertThatCode { service.getCalendar(allowed.year, allowed.monthValue) }.doesNotThrowAnyException()
-		assertThatThrownBy { service.getCalendar(rejected.year, rejected.monthValue) }
+		assertThatCode { service.getCalendar(userId, allowed.year, allowed.monthValue) }.doesNotThrowAnyException()
+		assertThatThrownBy { service.getCalendar(userId, rejected.year, rejected.monthValue) }
 			.isInstanceOf(ProjectionRangeExceededException::class.java)
 			.hasMessageContaining("months=601")
 	}
 
 	@Test
 	fun `유효하지 않은 year 또는 month는 날짜 예외를 전파한다`() {
-		assertThatThrownBy { service.getCalendar(1_000_000_000, 1) }
+		assertThatThrownBy { service.getCalendar(userId, 1_000_000_000, 1) }
 			.isInstanceOf(DateTimeException::class.java)
-		assertThatThrownBy { service.getCalendar(2026, 0) }
+		assertThatThrownBy { service.getCalendar(userId, 2026, 0) }
 			.isInstanceOf(DateTimeException::class.java)
 	}
 
@@ -140,7 +141,7 @@ class FinancialCalendarServiceImplTest {
 		liquidity.balance = Long.MAX_VALUE
 		source.defaultOccurrences = listOf(income(LocalDate.of(2026, 9, 16), 1L))
 
-		assertThatThrownBy { service.getCalendar(2026, 9) }
+		assertThatThrownBy { service.getCalendar(userId, 2026, 9) }
 			.isInstanceOf(ArithmeticException::class.java)
 	}
 
@@ -162,7 +163,7 @@ private class FakeCalendarOccurrenceSource : CalendarOccurrenceSource {
 	val resultsByRange = mutableMapOf<Pair<LocalDate, LocalDate>, List<ScheduleOccurrence>>()
 	val calls = mutableListOf<Pair<LocalDate, LocalDate>>()
 
-	override fun findOccurrences(from: LocalDate, toInclusive: LocalDate): List<ScheduleOccurrence> {
+	override fun findOccurrences(userId: UUID, from: LocalDate, toInclusive: LocalDate): List<ScheduleOccurrence> {
 		calls += from to toInclusive
 		return resultsByRange[from to toInclusive] ?: defaultOccurrences
 	}
@@ -172,7 +173,7 @@ private class FakeLiquidityBalanceProvider : LiquidityBalanceProvider {
 	var balance: Long = 0L
 	var callCount: Int = 0
 
-	override fun getCurrentLiquidBalance(): Long {
+	override fun getCurrentLiquidBalance(userId: UUID): Long {
 		callCount += 1
 		return balance
 	}

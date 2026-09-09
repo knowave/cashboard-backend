@@ -10,9 +10,10 @@ class AccountRepositoryImpl(
 ) : AccountRepository {
 	override fun save(account: Account): Account = accountJpaRepository.save(account)
 
-	override fun findById(id: UUID): Account? = accountJpaRepository.findById(id).orElse(null)
+	override fun findByIdAndUserId(id: UUID, userId: UUID): Account? =
+		accountJpaRepository.findByIdAndUserId(id, userId)
 
-	override fun findAll(): List<Account> = accountJpaRepository.findAll()
+	override fun findAllByUserId(userId: UUID): List<Account> = accountJpaRepository.findAllByUserId(userId)
 
 	override fun delete(account: Account) = accountJpaRepository.delete(account)
 }

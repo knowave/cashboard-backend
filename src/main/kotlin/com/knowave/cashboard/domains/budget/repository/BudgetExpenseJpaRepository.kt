@@ -5,5 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository
 import java.util.UUID
 
 interface BudgetExpenseJpaRepository : JpaRepository<BudgetExpense, UUID> {
-	fun findAllByMonthlyBudgetIdOrderBySpentAtDesc(monthlyBudgetId: UUID): List<BudgetExpense>
+	fun findByIdAndUserId(id: UUID, userId: UUID): BudgetExpense?
+	fun findAllByMonthlyBudgetIdAndUserIdOrderBySpentAtDesc(monthlyBudgetId: UUID, userId: UUID): List<BudgetExpense>
 }

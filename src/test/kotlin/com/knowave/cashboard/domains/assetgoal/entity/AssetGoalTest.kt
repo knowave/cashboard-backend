@@ -4,11 +4,13 @@ import com.knowave.cashboard.domains.assetgoal.service.dto.UpdateAssetGoalComman
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.time.LocalDate
+import java.util.UUID
 
 class AssetGoalTest {
 	@Test
 	fun `applyUpdate는 변경된 값만 Entity에 반영한다`() {
 		val assetGoal = AssetGoal(
+			userId = UUID.randomUUID(),
 			name = "1억 만들기",
 			targetAmount = 100_000_000L,
 			targetDate = LocalDate.of(2030, 12, 31),

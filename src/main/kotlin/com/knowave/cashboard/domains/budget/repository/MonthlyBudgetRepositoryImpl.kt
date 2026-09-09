@@ -11,18 +11,18 @@ class MonthlyBudgetRepositoryImpl(
 	override fun save(monthlyBudget: MonthlyBudget): MonthlyBudget =
 		monthlyBudgetJpaRepository.save(monthlyBudget)
 
-	override fun findById(id: UUID): MonthlyBudget? =
-		monthlyBudgetJpaRepository.findById(id).orElse(null)
+	override fun findByIdAndUserId(id: UUID, userId: UUID): MonthlyBudget? =
+		monthlyBudgetJpaRepository.findByIdAndUserId(id, userId)
 
-	override fun findByIdForUpdate(id: UUID): MonthlyBudget? =
-		monthlyBudgetJpaRepository.findByIdForUpdate(id)
+	override fun findByIdForUpdate(id: UUID, userId: UUID): MonthlyBudget? =
+		monthlyBudgetJpaRepository.findByIdForUpdate(id, userId)
 
-	override fun findByTargetMonth(targetMonth: String): MonthlyBudget? =
-		monthlyBudgetJpaRepository.findByTargetMonth(targetMonth)
+	override fun findByTargetMonthAndUserId(targetMonth: String, userId: UUID): MonthlyBudget? =
+		monthlyBudgetJpaRepository.findByTargetMonthAndUserId(targetMonth, userId)
 
-	override fun existsById(id: UUID): Boolean =
-		monthlyBudgetJpaRepository.existsById(id)
+	override fun existsByIdAndUserId(id: UUID, userId: UUID): Boolean =
+		monthlyBudgetJpaRepository.existsByIdAndUserId(id, userId)
 
-	override fun existsByTargetMonth(targetMonth: String): Boolean =
-		monthlyBudgetJpaRepository.existsByTargetMonth(targetMonth)
+	override fun existsByTargetMonthAndUserId(targetMonth: String, userId: UUID): Boolean =
+		monthlyBudgetJpaRepository.existsByTargetMonthAndUserId(targetMonth, userId)
 }

@@ -6,23 +6,24 @@ import com.knowave.cashboard.domains.expenseanalysis.repository.dto.CategoryExpe
 import org.springframework.stereotype.Component
 import java.time.LocalDate
 import java.time.YearMonth
+import java.util.UUID
 
 @Component
 class WeeklyReportProvider(
 	private val expenseRepository: ExpenseAnalysisRepository,
 	private val monthlyBudgetRepository: MonthlyBudgetRepository,
 ) {
-	fun generate(runDate: LocalDate): WeeklyReportSummary {
+	fun generate(userId: UUID, runDate: LocalDate): WeeklyReportSummary {
 		val weekStart = runDate.minusWeeks(1)
-		val currentExpenses = expenseRepository.findCategoryExpenses(weekStart, runDate)
-		val previousExpenses = expenseRepository.findCategoryExpenses(weekStart.minusWeeks(1), weekStart)
+		val currentExpenses = expenseRepository.findCategoryExpenses(userId, weekStart, runDate)
+		val previousExpenses = expenseRepository.findCategoryExpenses(userId, weekStart.minusWeeks(1), weekStart)
 		val totalExpense = currentExpenses.sumOf { it.amount }
 		val previousTotal = previousExpenses.sumOf { it.amount }
 		val differenceRate = if (previousTotal == 0L) null else (totalExpense - previousTotal) * 100.0 / previousTotal
 		val topCategory = currentExpenses.sortedWith(
 			compareByDescending<CategoryExpenseProjection> { it.amount }.thenBy { it.category },
 		).firstOrNull()?.category
-		val budget = monthlyBudgetRepository.findByTargetMonth(YearMonth.from(runDate).toString())
+		val budget = monthlyBudgetRepository.findByTargetMonthAndUserId(YearMonth.from(runDate).toString(), userId)
 
 		return WeeklyReportSummary(
 			weekStart = weekStart,

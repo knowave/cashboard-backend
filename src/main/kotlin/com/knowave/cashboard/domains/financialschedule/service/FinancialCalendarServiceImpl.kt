@@ -13,6 +13,7 @@ import java.time.Clock
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.temporal.ChronoUnit
+import java.util.UUID
 
 @Service
 @Transactional(readOnly = true)
@@ -23,7 +24,7 @@ class FinancialCalendarServiceImpl(
 ) : FinancialCalendarService {
 	private val calculator = FinancialCashFlowCalculator()
 
-	override fun getCalendar(year: Int, month: Int): FinancialCalendarResult {
+	override fun getCalendar(userId: UUID, year: Int, month: Int): FinancialCalendarResult {
 		val targetMonth = YearMonth.of(year, month)
 		val baseDate = LocalDate.now(clock)
 		val currentMonth = YearMonth.from(baseDate)
@@ -34,22 +35,23 @@ class FinancialCalendarServiceImpl(
 
 		val monthStart = targetMonth.atDay(1)
 		val monthEnd = targetMonth.atEndOfMonth()
-		val items = occurrenceSource.findOccurrences(monthStart, monthEnd)
+		val items = occurrenceSource.findOccurrences(userId, monthStart, monthEnd)
 		val summary = calculator.summarize(items)
 		val projection = when {
 			targetMonth < currentMonth -> null
-			targetMonth == currentMonth -> currentProjection(baseDate, items)
-			else -> futureProjection(baseDate, monthStart, items)
+			targetMonth == currentMonth -> currentProjection(userId, baseDate, items)
+			else -> futureProjection(userId, baseDate, monthStart, items)
 		}
 
 		return FinancialCalendarResult(year, month, items, summary, projection)
 	}
 
 	private fun currentProjection(
+		userId: UUID,
 		baseDate: LocalDate,
 		items: List<ScheduleOccurrence>,
 	): FinancialCalendarProjectionResult {
-		val startBalance = liquidityBalanceProvider.getCurrentLiquidBalance()
+		val startBalance = liquidityBalanceProvider.getCurrentLiquidBalance(userId)
 		val projection = calculator.project(
 			projectionStartDate = baseDate.plusDays(1),
 			projectionStartBalance = startBalance,
@@ -59,17 +61,18 @@ class FinancialCalendarServiceImpl(
 	}
 
 	private fun futureProjection(
+		userId: UUID,
 		baseDate: LocalDate,
 		monthStart: LocalDate,
 		items: List<ScheduleOccurrence>,
 	): FinancialCalendarProjectionResult {
-		val currentBalance = liquidityBalanceProvider.getCurrentLiquidBalance()
+		val currentBalance = liquidityBalanceProvider.getCurrentLiquidBalance(userId)
 		val bridgeStart = baseDate.plusDays(1)
 		val bridgeEnd = monthStart.minusDays(1)
 		val bridgeItems = if (bridgeStart.isAfter(bridgeEnd)) {
 			emptyList()
 		} else {
-			occurrenceSource.findOccurrences(bridgeStart, bridgeEnd)
+			occurrenceSource.findOccurrences(userId, bridgeStart, bridgeEnd)
 		}
 		val startBalance = calculator.calculateClosingBalance(currentBalance, bridgeItems)
 		return calculator.project(monthStart, startBalance, items).toResult(baseDate)

@@ -10,9 +10,9 @@ class LoanRepositoryImpl(
 ) : LoanRepository {
 	override fun save(loan: Loan): Loan = loanJpaRepository.save(loan)
 
-	override fun findById(id: UUID): Loan? = loanJpaRepository.findById(id).orElse(null)
+	override fun findByIdAndUserId(id: UUID, userId: UUID): Loan? = loanJpaRepository.findByIdAndUserId(id, userId)
 
-	override fun findAll(): List<Loan> = loanJpaRepository.findAll()
+	override fun findAllByUserId(userId: UUID): List<Loan> = loanJpaRepository.findAllByUserId(userId)
 
 	override fun delete(loan: Loan) = loanJpaRepository.delete(loan)
 }

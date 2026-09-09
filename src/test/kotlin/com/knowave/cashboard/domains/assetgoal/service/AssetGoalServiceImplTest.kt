@@ -32,6 +32,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 class AssetGoalServiceImplTest {
+	private val userId = UUID.fromString("11111111-1111-1111-1111-111111111111")
 	private val operations = mutableListOf<String>()
 	private val assetGoalRepository = FakeAssetGoalRepository(operations)
 	private val savingRecordRepository = FakeAssetGoalSavingRecordRepository()
@@ -51,9 +52,10 @@ class AssetGoalServiceImplTest {
 
 	@Test
 	fun `자산 목표를 생성하고 현재 자산 기준 분석값을 반환한다`() {
-		accountRepository.accounts = listOf(Account("현금", "LIQUID", 4_000_000L))
+		accountRepository.accounts = listOf(Account(userId, "현금", "LIQUID", 4_000_000L))
 
 		val result = assetGoalServiceImpl.createAssetGoal(
+			userId,
 			CreateAssetGoalCommand(
 				name = "1천만원 만들기",
 				targetAmount = 10_000_000L,
@@ -70,9 +72,10 @@ class AssetGoalServiceImplTest {
 
 	@Test
 	fun `자산 목표 생성은 목표 달성률 변경 이벤트를 발행한다`() {
-		accountRepository.accounts = listOf(Account("현금", "LIQUID", 40L))
+		accountRepository.accounts = listOf(Account(userId, "현금", "LIQUID", 40L))
 
 		assetGoalServiceImpl.createAssetGoal(
+			userId,
 			CreateAssetGoalCommand("1천만원 만들기", 100L, LocalDate.now().plusMonths(6)),
 		)
 
@@ -88,15 +91,18 @@ class AssetGoalServiceImplTest {
 	@Test
 	fun `목표 삭제와 월별 저축 실적 변경은 자산 목표 이벤트를 발행하지 않는다`() {
 		val goalId = UUID.fromString("00000000-0000-0000-0000-000000000001")
-		assetGoalRepository.save(AssetGoal("1천만원 만들기", 100L, LocalDate.now().plusMonths(6)).apply {
+		assetGoalRepository.save(AssetGoal(userId, "1천만원 만들기", 100L, LocalDate.now().plusMonths(6)).apply {
 			assignBaseFields(goalId)
 		})
 		operations.clear()
 
-		assetGoalServiceImpl.deleteAssetGoal(goalId)
-		val savedRecord = assetGoalServiceImpl.recordMonthlySaving(CreateSavingRecordCommand("2026-07", 700_000L, null))
-		assetGoalServiceImpl.updateMonthlySaving(savedRecord.id, UpdateSavingRecordCommand("2026-07", 800_000L, null))
-		assetGoalServiceImpl.deleteMonthlySaving(savedRecord.id)
+		assetGoalServiceImpl.deleteAssetGoal(userId, goalId)
+		val savedRecord = assetGoalServiceImpl.recordMonthlySaving(
+			userId,
+			CreateSavingRecordCommand("2026-07", 700_000L, null),
+		)
+		assetGoalServiceImpl.updateMonthlySaving(userId, savedRecord.id, UpdateSavingRecordCommand("2026-07", 800_000L, null))
+		assetGoalServiceImpl.deleteMonthlySaving(userId, savedRecord.id)
 
 		assertThat(eventPublisher.events).isEmpty()
 		assertThat(operations).containsExactly("lock", "findById", "delete")
@@ -105,29 +111,30 @@ class AssetGoalServiceImplTest {
 	@Test
 	fun `자산 목표 수정은 변경 전후 목표 금액 이벤트를 발행한다`() {
 		val goalId = UUID.fromString("00000000-0000-0000-0000-000000000001")
-		assetGoalRepository.save(AssetGoal("1천만원 만들기", 100L, LocalDate.now().plusMonths(6)).apply {
+		assetGoalRepository.save(AssetGoal(userId, "1천만원 만들기", 100L, LocalDate.now().plusMonths(6)).apply {
 			assignBaseFields(goalId)
 		})
-		accountRepository.accounts = listOf(Account("현금", "LIQUID", 80L))
+		accountRepository.accounts = listOf(Account(userId, "현금", "LIQUID", 80L))
 		operations.clear()
 
 		val result = assetGoalServiceImpl.updateAssetGoal(
+			userId,
 			goalId,
 			com.knowave.cashboard.domains.assetgoal.service.dto.UpdateAssetGoalCommand("2천만원 만들기", 200L, LocalDate.now().plusMonths(7)),
 		)
 
 		assertThat(eventPublisher.events).containsExactly(
-			AssetGoalChangedEvent(goalId, "2천만원 만들기", 100L, 200L, 80L, 80L, fixedInstant),
+			AssetGoalChangedEvent(userId, goalId, "2천만원 만들기", 100L, 200L, 80L, 80L, fixedInstant),
 		)
 		assertThat(result.name).isEqualTo("2천만원 만들기")
 		assertThat(result.targetAmount).isEqualTo(200L)
-		assertThat(assetGoalRepository.findById(goalId)?.targetAmount).isEqualTo(200L)
+		assertThat(assetGoalRepository.findByIdAndUserId(goalId, userId)?.targetAmount).isEqualTo(200L)
 		assertThat(operations.take(3)).containsExactly("lock", "findById", "save")
 	}
 
 	@Test
 	fun `없는 자산 목표 조회는 CustomException으로 처리한다`() {
-		assertThatThrownBy { assetGoalServiceImpl.getAssetGoalDetail(UUID.randomUUID(), 3) }
+		assertThatThrownBy { assetGoalServiceImpl.getAssetGoalDetail(userId, UUID.randomUUID(), 3) }
 			.isInstanceOf(AssetGoalNotFoundException::class.java)
 	}
 
@@ -135,15 +142,16 @@ class AssetGoalServiceImplTest {
 	fun `시뮬레이션은 결과만 계산하고 저장하지 않는다`() {
 		val assetGoalId = UUID.randomUUID()
 		val targetDate = LocalDate.now().plusMonths(6)
-		assetGoalRepository.save(AssetGoal("1천만원 만들기", 10_000_000L, targetDate).apply {
+		assetGoalRepository.save(AssetGoal(userId, "1천만원 만들기", 10_000_000L, targetDate).apply {
 			assignBaseFields(assetGoalId)
 		})
-		accountRepository.accounts = listOf(Account("현금", "LIQUID", 4_000_000L))
+		accountRepository.accounts = listOf(Account(userId, "현금", "LIQUID", 4_000_000L))
 		val toTargetMonth = YearMonth.now().minusMonths(1)
-		savingRecordRepository.save(SavingRecord(toTargetMonth.toString(), 700_000L, null))
-		savingRecordRepository.save(SavingRecord(toTargetMonth.minusMonths(1).toString(), 500_000L, null))
+		savingRecordRepository.save(SavingRecord(userId, toTargetMonth.toString(), 700_000L, null))
+		savingRecordRepository.save(SavingRecord(userId, toTargetMonth.minusMonths(1).toString(), 500_000L, null))
 
 		val result = assetGoalServiceImpl.simulateAssetGoal(
+			userId = userId,
 			assetGoalId = assetGoalId,
 			command = AssetGoalSimulationCommand(
 				monthlySavingAmount = 2_000_000L,
@@ -160,6 +168,7 @@ class AssetGoalServiceImplTest {
 	@Test
 	fun `월별 저축 실적을 기록한다`() {
 		val result = assetGoalServiceImpl.recordMonthlySaving(
+			userId,
 			CreateSavingRecordCommand(
 				targetMonth = "2026-07",
 				amount = 700_000L,
@@ -173,10 +182,11 @@ class AssetGoalServiceImplTest {
 
 	@Test
 	fun `이미 기록된 월에는 월별 저축 실적을 중복 기록할 수 없다`() {
-		savingRecordRepository.save(SavingRecord("2026-07", 500_000L, null))
+		savingRecordRepository.save(SavingRecord(userId, "2026-07", 500_000L, null))
 
 		assertThatThrownBy {
 			assetGoalServiceImpl.recordMonthlySaving(
+				userId,
 				CreateSavingRecordCommand(
 					targetMonth = "2026-07",
 					amount = 700_000L,
@@ -192,6 +202,7 @@ class AssetGoalServiceImplTest {
 
 		assertThatThrownBy {
 			assetGoalServiceImpl.recordMonthlySaving(
+				userId,
 				CreateSavingRecordCommand(
 					targetMonth = "2026-07",
 					amount = 700_000L,
@@ -205,6 +216,7 @@ class AssetGoalServiceImplTest {
 	fun `유효하지 않은 월에는 저축 실적을 기록할 수 없다`() {
 		assertThatThrownBy {
 			assetGoalServiceImpl.recordMonthlySaving(
+				userId,
 				CreateSavingRecordCommand(
 					targetMonth = "2026-13",
 					amount = 700_000L,
@@ -218,10 +230,10 @@ class AssetGoalServiceImplTest {
 	fun `월별 저축 실적은 허용된 기간의 월 범위로 조회한다`() {
 		val toTargetMonth = YearMonth.now().minusMonths(1)
 		val fromTargetMonth = toTargetMonth.minusMonths(2)
-		savingRecordRepository.save(SavingRecord(toTargetMonth.toString(), 700_000L, null))
-		savingRecordRepository.save(SavingRecord(fromTargetMonth.minusMonths(1).toString(), 300_000L, null))
+		savingRecordRepository.save(SavingRecord(userId, toTargetMonth.toString(), 700_000L, null))
+		savingRecordRepository.save(SavingRecord(userId, fromTargetMonth.minusMonths(1).toString(), 300_000L, null))
 
-		val result = assetGoalServiceImpl.getMonthlySavingRecords(3)
+		val result = assetGoalServiceImpl.getMonthlySavingRecords(userId, 3)
 
 		assertThat(savingRecordRepository.lastRange).isEqualTo(fromTargetMonth.toString() to toTargetMonth.toString())
 		assertThat(result).hasSize(1)
@@ -230,7 +242,7 @@ class AssetGoalServiceImplTest {
 
 	@Test
 	fun `허용되지 않은 기간으로 월별 저축 실적을 조회할 수 없다`() {
-		assertThatThrownBy { assetGoalServiceImpl.getMonthlySavingRecords(5) }
+		assertThatThrownBy { assetGoalServiceImpl.getMonthlySavingRecords(userId, 5) }
 			.isInstanceOf(InvalidSavingPeriodException::class.java)
 	}
 }
@@ -251,12 +263,12 @@ private class FakeAssetGoalRepository(
 		return assetGoal
 	}
 
-	override fun findById(id: UUID): AssetGoal? {
+	override fun findByIdAndUserId(id: UUID, userId: UUID): AssetGoal? {
 		operations += "findById"
-		return assetGoals[id]
+		return assetGoals[id]?.takeIf { it.userId == userId }
 	}
 
-	override fun findAll(): List<AssetGoal> = assetGoals.values.toList()
+	override fun findAllByUserId(userId: UUID): List<AssetGoal> = assetGoals.values.filter { it.userId == userId }
 
 	override fun delete(assetGoal: AssetGoal) {
 		operations += "delete"
@@ -280,23 +292,25 @@ private class FakeAssetGoalSavingRecordRepository : SavingRecordRepository {
 		return savingRecord
 	}
 
-	override fun findById(id: UUID): SavingRecord? = records[id]
+	override fun findByIdAndUserId(id: UUID, userId: UUID): SavingRecord? =
+		records[id]?.takeIf { it.userId == userId }
 
-	override fun findByTargetMonth(targetMonth: String): SavingRecord? =
-		records.values.firstOrNull { it.targetMonth == targetMonth }
+	override fun findByTargetMonthAndUserId(targetMonth: String, userId: UUID): SavingRecord? =
+		records.values.firstOrNull { it.targetMonth == targetMonth && it.userId == userId }
 
-	override fun findAllByTargetMonthBetweenOrderByTargetMonthDesc(
+	override fun findAllByTargetMonthBetweenAndUserIdOrderByTargetMonthDesc(
 		fromTargetMonth: String,
 		toTargetMonth: String,
+		userId: UUID,
 	): List<SavingRecord> {
 		lastRange = fromTargetMonth to toTargetMonth
 		return records.values
-			.filter { it.targetMonth in fromTargetMonth..toTargetMonth }
+			.filter { it.targetMonth in fromTargetMonth..toTargetMonth && it.userId == userId }
 			.sortedByDescending { it.targetMonth }
 	}
 
-	override fun existsByTargetMonth(targetMonth: String): Boolean =
-		records.values.any { it.targetMonth == targetMonth }
+	override fun existsByTargetMonthAndUserId(targetMonth: String, userId: UUID): Boolean =
+		records.values.any { it.targetMonth == targetMonth && it.userId == userId }
 
 	override fun delete(savingRecord: SavingRecord) {
 		records.remove(savingRecord.id)
@@ -308,9 +322,9 @@ private class FakeAccountRepository : AccountRepository {
 
 	override fun save(account: Account): Account = account
 
-	override fun findById(id: UUID): Account? = null
+	override fun findByIdAndUserId(id: UUID, userId: UUID): Account? = null
 
-	override fun findAll(): List<Account> = accounts
+	override fun findAllByUserId(userId: UUID): List<Account> = accounts
 
 	override fun delete(account: Account) = Unit
 }
@@ -323,7 +337,7 @@ private class RecordingEventPublisher : ApplicationEventPublisher {
 private class RecordingAccountBalanceLockRepository(
 	private val operations: MutableList<String>,
 ) : AccountBalanceLockRepository {
-	override fun acquireTotalAssetLock() {
+	override fun acquireTotalAssetLock(userId: UUID) {
 		operations += "lock"
 	}
 }

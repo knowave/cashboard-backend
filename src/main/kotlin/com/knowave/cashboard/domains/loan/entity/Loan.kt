@@ -6,10 +6,14 @@ import jakarta.persistence.Entity
 import jakarta.persistence.Table
 import java.math.BigDecimal
 import java.time.YearMonth
+import java.util.UUID
 
 @Entity
 @Table(name = "loans")
 class Loan(
+	@Column(name = "user_id", nullable = false)
+	var userId: UUID,
+
 	@Column(name = "principal", nullable = false)
 	var principal: Long,
 

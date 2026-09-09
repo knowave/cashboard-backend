@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.UUID
 
 class WeeklyReportNotificationJobTest {
 	@Test
@@ -50,22 +51,22 @@ class WeeklyReportNotificationJobTest {
 }
 
 private class EmptyWeeklyExpenseRepository : com.knowave.cashboard.domains.expenseanalysis.repository.ExpenseAnalysisRepository {
-	override fun findCategoryExpenses(start: LocalDate, end: LocalDate) = emptyList<com.knowave.cashboard.domains.expenseanalysis.repository.dto.CategoryExpenseProjection>()
-	override fun findMonthlyExpenses(start: LocalDate, end: LocalDate) = emptyList<com.knowave.cashboard.domains.expenseanalysis.repository.dto.MonthlyExpenseProjection>()
+	override fun findCategoryExpenses(userId: UUID, start: LocalDate, end: LocalDate) = emptyList<com.knowave.cashboard.domains.expenseanalysis.repository.dto.CategoryExpenseProjection>()
+	override fun findMonthlyExpenses(userId: UUID, start: LocalDate, end: LocalDate) = emptyList<com.knowave.cashboard.domains.expenseanalysis.repository.dto.MonthlyExpenseProjection>()
 }
 
 private class EmptyWeeklyBudgetRepository : com.knowave.cashboard.domains.budget.repository.MonthlyBudgetRepository {
 	override fun save(monthlyBudget: com.knowave.cashboard.domains.budget.entity.MonthlyBudget) = monthlyBudget
-	override fun findById(id: java.util.UUID) = null
-	override fun findByIdForUpdate(id: java.util.UUID) = null
-	override fun findByTargetMonth(targetMonth: String) = null
-	override fun existsById(id: java.util.UUID) = false
-	override fun existsByTargetMonth(targetMonth: String) = false
+	override fun findByIdAndUserId(id: UUID, userId: UUID) = null
+	override fun findByIdForUpdate(id: UUID, userId: UUID) = null
+	override fun findByTargetMonthAndUserId(targetMonth: String, userId: UUID) = null
+	override fun existsByIdAndUserId(id: UUID, userId: UUID) = false
+	override fun existsByTargetMonthAndUserId(targetMonth: String, userId: UUID) = false
 }
 
 private class RecordingGenerationService : NotificationGenerationService {
 	val created = mutableListOf<NewNotification>()
-	override fun createIfEnabled(candidate: NewNotification): Boolean {
+	override fun createIfEnabled(userId: UUID, candidate: NewNotification): Boolean {
 		if (created.any { it.deduplicationKey == candidate.deduplicationKey }) return false
 		created += candidate
 		return true

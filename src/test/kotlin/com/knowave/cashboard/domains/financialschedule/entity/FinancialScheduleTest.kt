@@ -8,11 +8,15 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import java.time.LocalDate
+import java.util.UUID
 
 class FinancialScheduleTest {
+	private val userId = UUID.fromString("00000000-0000-0000-0000-0000000000aa")
+
 	@Test
 	fun `월 반복 일정을 생성하면 enum name과 반복 필드만 저장한다`() {
 		val schedule = FinancialSchedule.create(
+			userId = userId,
 			type = ScheduleType.LOAN,
 			title = "  신용대출 상환  ",
 			amount = 475_000L,
@@ -55,6 +59,7 @@ class FinancialScheduleTest {
 	@Test
 	fun `연 반복 규칙을 ONCE로 바꾸면 monthOfYear를 포함한 이전 반복 필드를 제거한다`() {
 		val schedule = FinancialSchedule.create(
+			userId = userId,
 			type = ScheduleType.INSURANCE,
 			title = "보험료",
 			amount = 120_000L,
@@ -81,6 +86,7 @@ class FinancialScheduleTest {
 	@Test
 	fun `일회성 반복 규칙을 월 반복 규칙으로 바꾸면 scheduledDate를 제거한다`() {
 		val schedule = FinancialSchedule.create(
+			userId = userId,
 			type = ScheduleType.SALARY,
 			title = "급여",
 			amount = 3_000_000L,
@@ -163,6 +169,7 @@ class FinancialScheduleTest {
 	fun `생성할 제목은 앞뒤 공백을 제거한 뒤 100자를 초과할 수 없다`() {
 		assertThatThrownBy {
 			FinancialSchedule.create(
+				userId = userId,
 				type = ScheduleType.LOAN,
 				title = " ${"a".repeat(101)} ",
 				amount = 475_000L,
@@ -213,6 +220,7 @@ class FinancialScheduleTest {
 	)
 
 	private fun schedule(amount: Long = 475_000L) = FinancialSchedule.create(
+		userId = userId,
 		type = ScheduleType.LOAN,
 		title = "대출 상환",
 		amount = amount,

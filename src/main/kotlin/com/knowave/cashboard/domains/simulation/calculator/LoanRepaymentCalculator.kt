@@ -33,7 +33,12 @@ class LoanRepaymentCalculator {
 		prepaymentAmount: Long,
 		baseDate: LocalDate,
 	): LoanRepaymentComparison {
-		require(prepaymentAmount in 0L..loan.currentBalance)
+		if (prepaymentAmount !in 0L..loan.currentBalance) {
+			throw InvalidLoanRepaymentConditionException(
+				"Prepayment amount must be between 0 and the current balance. " +
+					"prepaymentAmount=$prepaymentAmount, currentBalance=${loan.currentBalance}",
+			)
+		}
 
 		val current = buildSchedule(loan.currentBalance, loan, baseDate)
 		val simulated = buildSchedule(loan.currentBalance - prepaymentAmount, loan, baseDate)

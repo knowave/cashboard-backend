@@ -15,21 +15,21 @@ import java.util.UUID
 class LoanServiceImpl(
 	private val loanRepository: LoanRepository,
 ) : LoanService {
-	override fun create(command: CreateLoanCommand): LoanResult {
+	override fun create(userId: UUID, command: CreateLoanCommand): LoanResult {
 		validatePeriod(command.startMonth, command.maturityMonth)
-		return loanRepository.save(command.toEntity()).toResult()
+		return loanRepository.save(command.toEntity(userId)).toResult()
 	}
 
-	override fun get(id: UUID): LoanResult {
-		val loan = loanRepository.findById(id) ?: throw NotFoundException("Loan", id)
+	override fun get(userId: UUID, id: UUID): LoanResult {
+		val loan = loanRepository.findByIdAndUserId(id, userId) ?: throw NotFoundException("Loan", id)
 		return loan.toResult()
 	}
 
-	override fun getAll(): List<LoanResult> = loanRepository.findAll().map { it.toResult() }
+	override fun getAll(userId: UUID): List<LoanResult> = loanRepository.findAllByUserId(userId).map { it.toResult() }
 
-	override fun update(id: UUID, command: UpdateLoanCommand): LoanResult {
+	override fun update(userId: UUID, id: UUID, command: UpdateLoanCommand): LoanResult {
 		validatePeriod(command.startMonth, command.maturityMonth)
-		val loan = loanRepository.findById(id) ?: throw NotFoundException("Loan", id)
+		val loan = loanRepository.findByIdAndUserId(id, userId) ?: throw NotFoundException("Loan", id)
 
 		loan.update(
 			principal = command.principal,
@@ -42,8 +42,8 @@ class LoanServiceImpl(
 		return loanRepository.save(loan).toResult()
 	}
 
-	override fun delete(id: UUID) {
-		val loan = loanRepository.findById(id) ?: throw NotFoundException("Loan", id)
+	override fun delete(userId: UUID, id: UUID) {
+		val loan = loanRepository.findByIdAndUserId(id, userId) ?: throw NotFoundException("Loan", id)
 		loanRepository.delete(loan)
 	}
 

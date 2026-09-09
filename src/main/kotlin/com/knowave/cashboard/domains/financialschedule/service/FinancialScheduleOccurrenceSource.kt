@@ -15,18 +15,19 @@ import com.knowave.cashboard.domains.financialschedule.service.dto.toRecurrenceR
 import org.springframework.stereotype.Component
 import org.slf4j.LoggerFactory
 import java.time.LocalDate
+import java.util.UUID
 
 @Component
 class FinancialScheduleOccurrenceSource(
 	private val financialScheduleRepository: FinancialScheduleRepository,
 	private val scheduleOccurrenceGenerator: ScheduleOccurrenceGenerator,
 ) : CalendarOccurrenceSource {
-	override fun findOccurrences(from: LocalDate, toInclusive: LocalDate): List<ScheduleOccurrence> {
+	override fun findOccurrences(userId: UUID, from: LocalDate, toInclusive: LocalDate): List<ScheduleOccurrence> {
 		if (toInclusive.isBefore(from)) {
 			throw InvalidFinancialSchedulePeriodException("toInclusive must not be before from.")
 		}
 
-		return financialScheduleRepository.findCandidates(from, toInclusive)
+		return financialScheduleRepository.findCandidates(userId, from, toInclusive)
 			.flatMap { schedule -> scheduleOccurrenceGenerator.generate(schedule.toDefinition(), from, toInclusive) }
 			.sortedWith(compareBy(ScheduleOccurrence::date, ScheduleOccurrence::title, ScheduleOccurrence::scheduleId))
 	}

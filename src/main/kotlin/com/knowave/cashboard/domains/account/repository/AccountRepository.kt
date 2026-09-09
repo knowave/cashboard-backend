@@ -5,7 +5,7 @@ import java.util.UUID
 
 interface AccountRepository {
 	fun save(account: Account): Account
-	fun findById(id: UUID): Account?
-	fun findAll(): List<Account>
+	fun findByIdAndUserId(id: UUID, userId: UUID): Account?
+	fun findAllByUserId(userId: UUID): List<Account>
 	fun delete(account: Account)
 }

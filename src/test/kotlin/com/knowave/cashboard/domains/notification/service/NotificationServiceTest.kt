@@ -23,6 +23,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 class NotificationServiceTest {
+	private val userId = UUID.randomUUID()
 	private val notificationRepository = FakeNotificationRepository()
 	private val settingRepository = FakeNotificationSettingRepository()
 	private val preferenceRepository = FakeNotificationPreferenceRepository()
@@ -36,7 +37,7 @@ class NotificationServiceTest {
 
 	@Test
 	fun `설정이 없으면 후보 알림을 생성한다`() {
-		val created = generationService.createIfEnabled(paymentCandidate("default-enabled"))
+		val created = generationService.createIfEnabled(userId, paymentCandidate("default-enabled"))
 
 		assertThat(created).isTrue()
 		assertThat(notificationRepository.inserted).hasSize(1)
@@ -44,9 +45,9 @@ class NotificationServiceTest {
 
 	@Test
 	fun `비활성 유형은 후보 알림을 생성하지 않는다`() {
-		settingRepository.upsert(NotificationType.PAYMENT_DUE, false)
+		settingRepository.upsert(userId, NotificationType.PAYMENT_DUE, false)
 
-		val created = generationService.createIfEnabled(paymentCandidate("disabled"))
+		val created = generationService.createIfEnabled(userId, paymentCandidate("disabled"))
 
 		assertThat(created).isFalse()
 		assertThat(notificationRepository.inserted).isEmpty()
@@ -54,21 +55,21 @@ class NotificationServiceTest {
 
 	@Test
 	fun `동일 중복 키는 생성하지 않는다`() {
-		assertThat(generationService.createIfEnabled(paymentCandidate("same-key"))).isTrue()
+		assertThat(generationService.createIfEnabled(userId, paymentCandidate("same-key"))).isTrue()
 
-		assertThat(generationService.createIfEnabled(paymentCandidate("same-key"))).isFalse()
+		assertThat(generationService.createIfEnabled(userId, paymentCandidate("same-key"))).isFalse()
 		assertThat(notificationRepository.inserted).hasSize(1)
 	}
 
 	@Test
 	fun `목록 페이지는 음수 페이지를 거절한다`() {
-		assertThatThrownBy { queryService.getPage(page = -1, size = 20, read = null) }
+		assertThatThrownBy { queryService.getPage(userId = userId, page = -1, size = 20, read = null) }
 			.isInstanceOf(InvalidNotificationPageException::class.java)
 	}
 
 	@Test
 	fun `목록 페이지는 100을 넘는 크기를 거절한다`() {
-		assertThatThrownBy { queryService.getPage(page = 0, size = 101, read = null) }
+		assertThatThrownBy { queryService.getPage(userId = userId, page = 0, size = 101, read = null) }
 			.isInstanceOf(InvalidNotificationPageException::class.java)
 	}
 
@@ -76,8 +77,8 @@ class NotificationServiceTest {
 	fun `전체 읽음은 이번 요청에서 변경된 알림 수를 반환한다`() {
 		notificationRepository.markAllReadResult = 2
 
-		assertThat(commandService.markAllRead()).isEqualTo(2)
-		assertThat(commandService.markAllRead()).isZero()
+		assertThat(commandService.markAllRead(userId)).isEqualTo(2)
+		assertThat(commandService.markAllRead(userId)).isZero()
 	}
 
 	@Test
@@ -85,8 +86,8 @@ class NotificationServiceTest {
 		val id = UUID.fromString("00000000-0000-0000-0000-000000000002")
 		notificationRepository.notifications[id] = notification(id, "atomic-read")
 
-		val first = commandService.markRead(id)
-		val repeated = commandService.markRead(id)
+		val first = commandService.markRead(userId, id)
+		val repeated = commandService.markRead(userId, id)
 
 		assertThat(first.readAt).isEqualTo(Instant.parse("2026-09-02T00:00:00Z"))
 		assertThat(repeated.readAt).isEqualTo(first.readAt)
@@ -97,16 +98,17 @@ class NotificationServiceTest {
 	fun `존재하지 않는 알림 읽음은 not found 오류를 반환한다`() {
 		val id = UUID.fromString("00000000-0000-0000-0000-000000000003")
 
-		assertThatThrownBy { commandService.markRead(id) }
+		assertThatThrownBy { commandService.markRead(userId, id) }
 			.isInstanceOf(NotificationNotFoundException::class.java)
 	}
 
 	@Test
 	fun `설정 부분 변경은 전달되지 않은 유형과 push 설정을 유지한다`() {
-		settingRepository.upsert(NotificationType.PAYMENT_DUE, false)
+		settingRepository.upsert(userId, NotificationType.PAYMENT_DUE, false)
 		preferenceRepository.pushEnabled = false
 
 		val result = settingService.patchSettings(
+			userId,
 			NotificationSettingCommand(settings = mapOf(NotificationType.WEEKLY_REPORT to false)),
 		)
 
@@ -118,7 +120,7 @@ class NotificationServiceTest {
 
 	@Test
 	fun `push 설정만 변경해도 유형별 설정은 기본 활성 상태를 유지한다`() {
-		val result = settingService.patchSettings(NotificationSettingCommand(pushEnabled = false))
+		val result = settingService.patchSettings(userId, NotificationSettingCommand(pushEnabled = false))
 
 		assertThat(result.pushEnabled).isFalse()
 		assertThat(result.settings.values).allMatch { it }
@@ -127,6 +129,7 @@ class NotificationServiceTest {
 	@Test
 	fun `잘못 저장된 알림 유형은 원인을 보존한 데이터 무결성 오류로 변환한다`() {
 		val notification = Notification.create(
+			userId = userId,
 			type = NotificationType.PAYMENT_DUE,
 			title = "결제 예정",
 			message = "내일 결제 예정입니다.",
@@ -143,6 +146,7 @@ class NotificationServiceTest {
 
 	private fun paymentCandidate(key: String) = NewNotification(
 		id = UUID.randomUUID(),
+		userId = userId,
 		type = NotificationType.PAYMENT_DUE,
 		title = "결제 예정",
 		message = "내일 결제 예정입니다.",
@@ -151,6 +155,7 @@ class NotificationServiceTest {
 	)
 
 	private fun notification(id: UUID, key: String) = Notification.create(
+		userId = userId,
 		type = NotificationType.PAYMENT_DUE,
 		title = "결제 예정",
 		message = "내일 결제 예정입니다.",
@@ -184,34 +189,34 @@ private class FakeNotificationRepository : NotificationRepository {
 		return true
 	}
 
-	override fun findById(id: UUID): Notification? = null
-	override fun findPage(read: Boolean?, pageable: Pageable): Page<Notification> = Page.empty(pageable)
-	override fun countUnread(): Long = 0
+	override fun findByIdAndUserId(id: UUID, userId: UUID): Notification? = null
+	override fun findPage(userId: UUID, read: Boolean?, pageable: Pageable): Page<Notification> = Page.empty(pageable)
+	override fun countUnread(userId: UUID): Long = 0
 	override fun save(notification: Notification): Notification = error("개별 읽음은 원자 저장소 연산을 사용해야 합니다.")
-	override fun markReadIfUnread(id: UUID, now: Instant): ConditionalReadResult? {
+	override fun markReadIfUnread(id: UUID, userId: UUID, now: Instant): ConditionalReadResult? {
 		val notification = notifications[id] ?: return null
 		val changed = notification.readAt == null
 		notification.markRead(now)
 		return ConditionalReadResult(notification, changed)
 	}
-	override fun markAllRead(now: Instant): Int = markAllReadResult.also { markAllReadResult = 0 }
+	override fun markAllRead(userId: UUID, now: Instant): Int = markAllReadResult.also { markAllReadResult = 0 }
 }
 
 private class FakeNotificationSettingRepository : NotificationSettingRepository {
 	private val values = mutableMapOf<NotificationType, Boolean>()
 
-	override fun isEnabled(type: NotificationType, defaultValue: Boolean): Boolean = values[type] ?: defaultValue
-	override fun upsert(type: NotificationType, enabled: Boolean) {
+	override fun isEnabled(userId: UUID, type: NotificationType, defaultValue: Boolean): Boolean = values[type] ?: defaultValue
+	override fun upsert(userId: UUID, type: NotificationType, enabled: Boolean) {
 		values[type] = enabled
 	}
-	override fun findAll(): Map<NotificationType, Boolean> = values.toMap()
+	override fun findAll(userId: UUID): Map<NotificationType, Boolean> = values.toMap()
 }
 
 private class FakeNotificationPreferenceRepository : NotificationPreferenceRepository {
 	var pushEnabled = true
 
-	override fun getPushEnabled(defaultValue: Boolean): Boolean = pushEnabled
-	override fun upsertPushEnabled(enabled: Boolean) {
+	override fun getPushEnabled(userId: UUID, defaultValue: Boolean): Boolean = pushEnabled
+	override fun upsertPushEnabled(userId: UUID, enabled: Boolean) {
 		pushEnabled = enabled
 	}
 }

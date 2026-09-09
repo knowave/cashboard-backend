@@ -88,7 +88,7 @@ private class FakeCalendarOccurrenceSource : CalendarOccurrenceSource {
 	var occurrences: List<ScheduleOccurrence> = emptyList()
 	var requestedRange: Pair<LocalDate, LocalDate>? = null
 
-	override fun findOccurrences(from: LocalDate, toInclusive: LocalDate): List<ScheduleOccurrence> {
+	override fun findOccurrences(userId: UUID, from: LocalDate, toInclusive: LocalDate): List<ScheduleOccurrence> {
 		requestedRange = from to toInclusive
 		return occurrences
 	}
@@ -97,7 +97,7 @@ private class FakeCalendarOccurrenceSource : CalendarOccurrenceSource {
 private class IdempotentGenerationService : NotificationGenerationService {
 	val created = mutableListOf<NewNotification>()
 
-	override fun createIfEnabled(candidate: NewNotification): Boolean {
+	override fun createIfEnabled(userId: UUID, candidate: NewNotification): Boolean {
 		if (created.any { it.deduplicationKey == candidate.deduplicationKey }) return false
 		created += candidate
 		return true

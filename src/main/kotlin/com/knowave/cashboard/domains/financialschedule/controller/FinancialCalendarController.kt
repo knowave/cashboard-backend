@@ -2,11 +2,14 @@ package com.knowave.cashboard.domains.financialschedule.controller
 
 import com.knowave.cashboard.common.response.ApiResponse
 import com.knowave.cashboard.common.response.success
+import com.knowave.cashboard.common.security.AuthenticatedUser
 import com.knowave.cashboard.domains.financialschedule.controller.dto.FinancialCalendarResponse
 import com.knowave.cashboard.domains.financialschedule.controller.dto.toResponse
 import com.knowave.cashboard.domains.financialschedule.service.FinancialCalendarService
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
+import java.util.UUID
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
@@ -21,8 +24,10 @@ class FinancialCalendarController(
 ) {
 	@GetMapping
 	fun getCalendar(
+		@AuthenticationPrincipal user: AuthenticatedUser,
 		@RequestParam @Min(1900) @Max(9999) year: Int,
 		@RequestParam @Min(1) @Max(12) month: Int,
 	): ApiResponse<FinancialCalendarResponse> =
-		success(financialCalendarService.getCalendar(year, month).toResponse())
+		success(financialCalendarService.getCalendar(user.userId, year, month).toResponse())
+
 }

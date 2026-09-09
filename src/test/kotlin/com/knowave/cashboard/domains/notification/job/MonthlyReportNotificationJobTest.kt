@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.UUID
 
 class MonthlyReportNotificationJobTest {
 	@Test
@@ -45,7 +46,7 @@ class MonthlyReportNotificationJobTest {
 }
 
 private class MonthlyEmptyAnalysisService : com.knowave.cashboard.domains.expenseanalysis.service.ExpenseAnalysisService {
-	override fun getAnalysis(year: Int, month: Int) = com.knowave.cashboard.domains.expenseanalysis.service.dto.ExpenseAnalysisResult(
+	override fun getAnalysis(userId: UUID, year: Int, month: Int) = com.knowave.cashboard.domains.expenseanalysis.service.dto.ExpenseAnalysisResult(
 		com.knowave.cashboard.domains.expenseanalysis.service.dto.PeriodResult(year, month), 0,
 		com.knowave.cashboard.domains.expenseanalysis.service.dto.ExpenseComparisonResult(0, 0, null),
 		com.knowave.cashboard.domains.expenseanalysis.service.dto.RecentAverageResult(0, 0), emptyList(), emptyList(),
@@ -54,21 +55,21 @@ private class MonthlyEmptyAnalysisService : com.knowave.cashboard.domains.expens
 
 private class MonthlyEmptyGoalRepository : com.knowave.cashboard.domains.assetgoal.repository.AssetGoalRepository {
 	override fun save(assetGoal: com.knowave.cashboard.domains.assetgoal.entity.AssetGoal) = assetGoal
-	override fun findById(id: java.util.UUID) = null
-	override fun findAll() = emptyList<com.knowave.cashboard.domains.assetgoal.entity.AssetGoal>()
+	override fun findByIdAndUserId(id: UUID, userId: UUID) = null
+	override fun findAllByUserId(userId: UUID) = emptyList<com.knowave.cashboard.domains.assetgoal.entity.AssetGoal>()
 	override fun delete(assetGoal: com.knowave.cashboard.domains.assetgoal.entity.AssetGoal) = Unit
 }
 
 private class MonthlyEmptyAccountRepository : com.knowave.cashboard.domains.account.repository.AccountRepository {
 	override fun save(account: com.knowave.cashboard.domains.account.entity.Account) = account
-	override fun findById(id: java.util.UUID) = null
-	override fun findAll() = emptyList<com.knowave.cashboard.domains.account.entity.Account>()
+	override fun findByIdAndUserId(id: UUID, userId: UUID) = null
+	override fun findAllByUserId(userId: UUID) = emptyList<com.knowave.cashboard.domains.account.entity.Account>()
 	override fun delete(account: com.knowave.cashboard.domains.account.entity.Account) = Unit
 }
 
 private class MonthlyRecordingGenerationService : com.knowave.cashboard.domains.notification.service.NotificationGenerationService {
 	val created = mutableListOf<com.knowave.cashboard.domains.notification.repository.NewNotification>()
-	override fun createIfEnabled(candidate: com.knowave.cashboard.domains.notification.repository.NewNotification): Boolean {
+	override fun createIfEnabled(userId: UUID, candidate: com.knowave.cashboard.domains.notification.repository.NewNotification): Boolean {
 		if (created.any { it.deduplicationKey == candidate.deduplicationKey }) return false
 		created += candidate
 		return true

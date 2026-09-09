@@ -21,18 +21,21 @@ class BudgetNotificationEventListenerTest {
 
 		assertThat(thresholdService.decision?.selectedPolicyKey).isEqualTo("BUDGET:${event.monthlyBudgetId}:100")
 		assertThat(thresholdService.occurredAt).isEqualTo(event.occurredAt)
+		assertThat(thresholdService.userId).isEqualTo(event.userId)
 	}
 
 	private fun event(previousUsed: Long, currentUsed: Long, budget: Long) = BudgetUsageChangedEvent(
-		UUID.randomUUID(), budget, previousUsed, budget, currentUsed, Instant.parse("2026-09-02T00:00:00Z"),
+		UUID.randomUUID(), UUID.randomUUID(), budget, previousUsed, budget, currentUsed, Instant.parse("2026-09-02T00:00:00Z"),
 	)
 }
 
 private class BudgetRecordingThresholdNotificationService : ThresholdNotificationService {
 	var decision: ThresholdNotificationDecision? = null
 	var occurredAt: Instant? = null
+	var userId: UUID? = null
 
-	override fun process(decision: ThresholdNotificationDecision, occurredAt: Instant): Boolean {
+	override fun process(userId: UUID, decision: ThresholdNotificationDecision, occurredAt: Instant): Boolean {
+		this.userId = userId
 		this.decision = decision
 		this.occurredAt = occurredAt
 		return true

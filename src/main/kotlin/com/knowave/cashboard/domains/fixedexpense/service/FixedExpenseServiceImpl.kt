@@ -15,27 +15,31 @@ import java.util.UUID
 class FixedExpenseServiceImpl(
 	private val fixedExpenseRepository: FixedExpenseRepository,
 ) : FixedExpenseService {
-	override fun create(command: CreateFixedExpenseCommand): FixedExpenseResult {
+	override fun create(userId: UUID, command: CreateFixedExpenseCommand): FixedExpenseResult {
 		validatePeriod(command.startMonth, command.endMonth)
-		return fixedExpenseRepository.save(command.toEntity()).toResult()
+		return fixedExpenseRepository.save(command.toEntity(userId)).toResult()
 	}
 
-	override fun get(id: UUID): FixedExpenseResult {
-		val fixedExpense = fixedExpenseRepository.findById(id) ?: throw NotFoundException("FixedExpense", id)
+	override fun get(userId: UUID, id: UUID): FixedExpenseResult {
+		val fixedExpense = fixedExpenseRepository.findByIdAndUserId(id, userId)
+			?: throw NotFoundException("FixedExpense", id)
 		return fixedExpense.toResult()
 	}
 
-	override fun getAll(): List<FixedExpenseResult> = fixedExpenseRepository.findAll().map { it.toResult() }
+	override fun getAll(userId: UUID): List<FixedExpenseResult> =
+		fixedExpenseRepository.findAllByUserId(userId).map { it.toResult() }
 
-	override fun update(id: UUID, command: UpdateFixedExpenseCommand): FixedExpenseResult {
+	override fun update(userId: UUID, id: UUID, command: UpdateFixedExpenseCommand): FixedExpenseResult {
 		validatePeriod(command.startMonth, command.endMonth)
-		val fixedExpense = fixedExpenseRepository.findById(id) ?: throw NotFoundException("FixedExpense", id)
+		val fixedExpense = fixedExpenseRepository.findByIdAndUserId(id, userId)
+			?: throw NotFoundException("FixedExpense", id)
 		fixedExpense.update(command.name, command.amount, command.category, command.startMonth, command.endMonth)
 		return fixedExpenseRepository.save(fixedExpense).toResult()
 	}
 
-	override fun delete(id: UUID) {
-		val fixedExpense = fixedExpenseRepository.findById(id) ?: throw NotFoundException("FixedExpense", id)
+	override fun delete(userId: UUID, id: UUID) {
+		val fixedExpense = fixedExpenseRepository.findByIdAndUserId(id, userId)
+			?: throw NotFoundException("FixedExpense", id)
 		fixedExpenseRepository.delete(fixedExpense)
 	}
 

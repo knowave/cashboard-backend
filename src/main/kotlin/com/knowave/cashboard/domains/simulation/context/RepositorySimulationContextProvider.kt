@@ -18,12 +18,12 @@ class RepositorySimulationContextProvider(
 	private val loanRepository: LoanRepository,
 	private val clock: Clock,
 ) : SimulationContextProvider {
-	override fun loadLiquidityContext(): LiquidityContext {
+	override fun loadLiquidityContext(userId: UUID): LiquidityContext {
 		val baseDate = LocalDate.now(clock)
-		val accounts = accountRepository.findAll()
+		val accounts = accountRepository.findAllByUserId(userId)
 		val end = YearMonth.from(baseDate).atDay(1)
 		val start = YearMonth.from(baseDate).minusMonths(EXPENSE_LOOKBACK_MONTHS).atDay(1)
-		val expenses = expenseAnalysisRepository.findMonthlyExpenses(start, end)
+		val expenses = expenseAnalysisRepository.findMonthlyExpenses(userId, start, end)
 
 		return LiquidityContext(
 			baseDate = baseDate,
@@ -38,9 +38,9 @@ class RepositorySimulationContextProvider(
 		)
 	}
 
-	override fun loadLoanRepaymentContext(loanId: UUID): SimulationContext {
-		val liquidity = loadLiquidityContext()
-		val loan = loanRepository.findById(loanId) ?: throw NotFoundException("Loan", loanId)
+	override fun loadLoanRepaymentContext(userId: UUID, loanId: UUID): SimulationContext {
+		val liquidity = loadLiquidityContext(userId)
+		val loan = loanRepository.findByIdAndUserId(loanId, userId) ?: throw NotFoundException("Loan", loanId)
 		return SimulationContext(
 			baseDate = liquidity.baseDate,
 			liquidAssetAmount = liquidity.liquidAssetAmount,

@@ -5,6 +5,7 @@ import com.knowave.cashboard.domains.assetgoal.service.dto.UpdateSavingRecordCom
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
+import java.util.UUID
 
 class SavingRecordTest {
 	@Test
@@ -18,6 +19,7 @@ class SavingRecordTest {
 	@Test
 	fun `applyUpdate는 변경된 월별 저축 실적을 반영한다`() {
 		val savingRecord = SavingRecord(
+			userId = UUID.randomUUID(),
 			targetMonth = "2026-07",
 			amount = 500_000L,
 			memo = "기존",

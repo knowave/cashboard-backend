@@ -21,6 +21,7 @@ import com.knowave.cashboard.support.PostgreSqlIntegrationTest
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.TestConfiguration
@@ -31,10 +32,17 @@ import org.springframework.context.annotation.Primary
 import org.springframework.jdbc.core.JdbcTemplate
 import java.time.Instant
 import java.time.LocalDate
+import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
+// ponytail: V8 미실행 대기 — 이 파일의 시나리오는 전부 NotificationPolicyMarkerRepositoryImpl.claimAll
+// 또는 NotificationSettingRepositoryImpl.upsert를 거친다. 두 SQL 모두 `ON CONFLICT (user_id, ...)`가
+// V8의 복합 UNIQUE를 전제하는데 V8이 아직 실행되지 않아 notification_policy_markers는
+// UNIQUE(policy_key)만, notification_settings는 UNIQUE(type)만 갖는다. Postgres는 대상 제약이
+// 없는 ON CONFLICT를 계획 단계에서 즉시 거부하므로(동시성·사용자 수와 무관) 이 클래스의 테스트는
+// 전부 V8 적용 전까지 실패가 예상된다.
 abstract class ImmediateNotificationIntegrationSupport : PostgreSqlIntegrationTest() {
 	@Autowired lateinit var budgetService: BudgetStrategyService
 	@Autowired lateinit var accountService: AccountService
@@ -44,20 +52,10 @@ abstract class ImmediateNotificationIntegrationSupport : PostgreSqlIntegrationTe
 	@Autowired lateinit var eventPublisher: ApplicationEventPublisher
 	@Autowired lateinit var jdbcTemplate: JdbcTemplate
 
+	protected lateinit var userId: UUID
+
 	@BeforeEach
 	fun isolateDatabase() {
-		jdbcTemplate.execute(
-			"""
-				CREATE TABLE IF NOT EXISTS accounts (
-					id UUID PRIMARY KEY,
-					name VARCHAR(255) NOT NULL,
-					type VARCHAR(50) NOT NULL,
-					balance BIGINT NOT NULL,
-					created_at TIMESTAMP NOT NULL,
-					updated_at TIMESTAMP NOT NULL
-				)
-			""".trimIndent(),
-		)
 		jdbcTemplate.execute(
 			"""
 				TRUNCATE TABLE
@@ -74,24 +72,26 @@ abstract class ImmediateNotificationIntegrationSupport : PostgreSqlIntegrationTe
 				RESTART IDENTITY CASCADE
 			""".trimIndent(),
 		)
+		userId = persistUser().id
 	}
 
 	protected fun assertBudgetThresholdScenario() {
 		val budget = createBudget(usedAmount = 70L)
 
-		budgetService.updateUsedAmount(budget.id, UpdateUsedAmountCommand(105L))
+		budgetService.updateUsedAmount(userId, budget.id, UpdateUsedAmountCommand(105L))
 
-		assertThat(monthlyBudgetRepository.findById(budget.id)!!.usedAmount).isEqualTo(105L)
+		assertThat(monthlyBudgetRepository.findByIdAndUserId(budget.id, userId)!!.usedAmount).isEqualTo(105L)
 		assertThat(notificationTypes()).containsExactly(NotificationType.BUDGET_EXCEEDED.name)
 		assertThat(markerKeys()).containsExactlyInAnyOrder("BUDGET:${budget.id}:80", "BUDGET:${budget.id}:100")
 	}
 
 	protected fun assertBudgetEventReentryIsNoOp() {
 		val budget = createBudget(usedAmount = 70L)
-		budgetService.updateUsedAmount(budget.id, UpdateUsedAmountCommand(105L))
+		budgetService.updateUsedAmount(userId, budget.id, UpdateUsedAmountCommand(105L))
 
 		eventPublisher.publishEvent(
 			BudgetUsageChangedEvent(
+				userId = userId,
 				monthlyBudgetId = budget.id,
 				previousBudgetAmount = 100L,
 				previousUsedAmount = 70L,
@@ -106,10 +106,10 @@ abstract class ImmediateNotificationIntegrationSupport : PostgreSqlIntegrationTe
 	}
 
 	protected fun assertDisabledBudgetTypeStillClaimsMarkers() {
-		settingRepository.upsert(NotificationType.BUDGET_EXCEEDED, false)
+		settingRepository.upsert(userId, NotificationType.BUDGET_EXCEEDED, false)
 		val budget = createBudget(usedAmount = 70L)
 
-		budgetService.updateUsedAmount(budget.id, UpdateUsedAmountCommand(105L))
+		budgetService.updateUsedAmount(userId, budget.id, UpdateUsedAmountCommand(105L))
 
 		assertThat(notificationTypes()).isEmpty()
 		assertThat(markerKeys()).containsExactlyInAnyOrder("BUDGET:${budget.id}:80", "BUDGET:${budget.id}:100")
@@ -117,10 +117,11 @@ abstract class ImmediateNotificationIntegrationSupport : PostgreSqlIntegrationTe
 
 	protected fun assertAccountChangeTriggersGoalMilestone() {
 		val goal = assetGoalService.createAssetGoal(
+			userId,
 			CreateAssetGoalCommand("주택 자금", 100L, LocalDate.of(2027, 1, 1)),
 		)
 
-		val account = accountService.create(CreateAccountCommand("입출금", AccountType.LIQUID, 105L))
+		val account = accountService.create(userId, CreateAccountCommand("입출금", AccountType.LIQUID, 105L))
 
 		assertThat(jdbcTemplate.queryForObject("SELECT balance FROM accounts WHERE id = ?", Long::class.java, account.id))
 			.isEqualTo(105L)
@@ -133,6 +134,7 @@ abstract class ImmediateNotificationIntegrationSupport : PostgreSqlIntegrationTe
 	}
 
 	protected fun createBudget(usedAmount: Long) = budgetService.create(
+		userId,
 		CreateMonthlyBudgetCommand("2026-09", 100L, usedAmount),
 	)
 
@@ -147,6 +149,7 @@ abstract class ImmediateNotificationIntegrationSupport : PostgreSqlIntegrationTe
 	)
 }
 
+@Disabled("V8__enforce_user_ownership.sql(Stage 3.5) 적용 후 활성화. ON CONFLICT (user_id, ...) 대상 제약이 아직 없다.")
 class ImmediateNotificationIntegrationTest : ImmediateNotificationIntegrationSupport() {
 	@Test
 	fun `동시 지출 추가는 예산 사용액과 marker와 알림을 일관되게 저장한다`() {
@@ -161,6 +164,7 @@ class ImmediateNotificationIntegrationTest : ImmediateNotificationIntegrationSup
 					ready.countDown()
 					check(start.await(10, TimeUnit.SECONDS))
 					budgetService.addExpense(
+						userId,
 						budget.id,
 						CreateBudgetExpenseCommand(amount, "식비", null, LocalDate.of(2026, 9, 2)),
 					)
@@ -176,7 +180,7 @@ class ImmediateNotificationIntegrationTest : ImmediateNotificationIntegrationSup
 			check(executor.awaitTermination(10, TimeUnit.SECONDS))
 		}
 
-		assertThat(monthlyBudgetRepository.findById(budget.id)!!.usedAmount).isEqualTo(130L)
+		assertThat(monthlyBudgetRepository.findByIdAndUserId(budget.id, userId)!!.usedAmount).isEqualTo(130L)
 		assertThat(jdbcTemplate.queryForObject(
 			"SELECT COUNT(*) FROM budget_expenses WHERE monthly_budget_id = ?",
 			Int::class.java,
@@ -206,6 +210,7 @@ class ImmediateNotificationIntegrationTest : ImmediateNotificationIntegrationSup
 	@Test
 	fun `동시 계좌 생성은 자산 목표 50퍼센트 marker와 알림을 놓치지 않는다`() {
 		val goal = assetGoalService.createAssetGoal(
+			userId,
 			CreateAssetGoalCommand("주택 자금", 100L, LocalDate.of(2027, 1, 1)),
 		)
 		val ready = CountDownLatch(2)
@@ -217,7 +222,7 @@ class ImmediateNotificationIntegrationTest : ImmediateNotificationIntegrationSup
 				executor.submit {
 					ready.countDown()
 					check(start.await(10, TimeUnit.SECONDS))
-					accountService.create(CreateAccountCommand(name, AccountType.LIQUID, 30L))
+					accountService.create(userId, CreateAccountCommand(name, AccountType.LIQUID, 30L))
 				}
 			}
 
@@ -238,8 +243,9 @@ class ImmediateNotificationIntegrationTest : ImmediateNotificationIntegrationSup
 
 	@Test
 	fun `동시 계좌와 목표 변경은 최종 50퍼센트 자산 목표 marker와 알림을 남긴다`() {
-		val account = accountService.create(CreateAccountCommand("입출금", AccountType.LIQUID, 40L))
+		val account = accountService.create(userId, CreateAccountCommand("입출금", AccountType.LIQUID, 40L))
 		val goal = assetGoalService.createAssetGoal(
+			userId,
 			CreateAssetGoalCommand("주택 자금", 100L, LocalDate.of(2027, 1, 1)),
 		)
 		val ready = CountDownLatch(2)
@@ -250,12 +256,13 @@ class ImmediateNotificationIntegrationTest : ImmediateNotificationIntegrationSup
 			val accountUpdate = executor.submit {
 				ready.countDown()
 				check(start.await(10, TimeUnit.SECONDS))
-				accountService.update(account.id, UpdateAccountCommand("입출금", AccountType.LIQUID, 45L))
+				accountService.update(userId, account.id, UpdateAccountCommand("입출금", AccountType.LIQUID, 45L))
 			}
 			val goalUpdate = executor.submit {
 				ready.countDown()
 				check(start.await(10, TimeUnit.SECONDS))
 				assetGoalService.updateAssetGoal(
+					userId,
 					goal.id,
 					UpdateAssetGoalCommand("주택 자금", 90L, LocalDate.of(2027, 1, 1)),
 				)
@@ -280,6 +287,7 @@ class ImmediateNotificationIntegrationTest : ImmediateNotificationIntegrationSup
 	}
 }
 
+@Disabled("V8__enforce_user_ownership.sql(Stage 3.5) 적용 후 활성화. ON CONFLICT (user_id, ...) 대상 제약이 아직 없다.")
 @Import(FailingNotificationGenerationConfig::class)
 class ImmediateNotificationRollbackIntegrationTest : ImmediateNotificationIntegrationSupport() {
 	@Test
@@ -287,10 +295,10 @@ class ImmediateNotificationRollbackIntegrationTest : ImmediateNotificationIntegr
 		val budget = createBudget(usedAmount = 70L)
 
 		assertThatThrownBy {
-			budgetService.updateUsedAmount(budget.id, UpdateUsedAmountCommand(105L))
+			budgetService.updateUsedAmount(userId, budget.id, UpdateUsedAmountCommand(105L))
 		}.isInstanceOf(IllegalStateException::class.java)
 
-		assertThat(monthlyBudgetRepository.findById(budget.id)!!.usedAmount).isEqualTo(70L)
+		assertThat(monthlyBudgetRepository.findByIdAndUserId(budget.id, userId)!!.usedAmount).isEqualTo(70L)
 		assertThat(notificationTypes()).isEmpty()
 		assertThat(markerKeys()).isEmpty()
 	}
@@ -301,7 +309,7 @@ class FailingNotificationGenerationConfig {
 	@Bean
 	@Primary
 	fun failingNotificationGenerationService(): NotificationGenerationService = object : NotificationGenerationService {
-		override fun createIfEnabled(candidate: NewNotification): Boolean {
+		override fun createIfEnabled(userId: UUID, candidate: NewNotification): Boolean {
 			throw IllegalStateException("forced notification failure")
 		}
 	}

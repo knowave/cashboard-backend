@@ -16,9 +16,12 @@ class AssetGoalNotificationEventListener(
 ) {
 	@EventListener
 	fun on(event: TotalAssetAmountChangedEvent) {
-		assetGoalRepository.findAll().forEach { goal ->
+		// AC-20e: scoped to this event's user only, not every user's goals.
+		assetGoalRepository.findAllByUserId(event.userId).forEach { goal ->
 			thresholdService.process(
+				event.userId,
 				policy.evaluate(
+					userId = event.userId,
 					goalId = requireNotNull(goal.id),
 					goalName = goal.name,
 					previousTargetAmount = goal.targetAmount,
@@ -35,7 +38,9 @@ class AssetGoalNotificationEventListener(
 	@EventListener
 	fun on(event: AssetGoalChangedEvent) {
 		thresholdService.process(
+			event.userId,
 			policy.evaluate(
+				userId = event.userId,
 				goalId = event.goalId,
 				goalName = event.goalName,
 				previousTargetAmount = event.previousTargetAmount,

@@ -9,6 +9,7 @@ import java.util.UUID
 
 data class NewNotification(
 	val id: UUID = UUID.randomUUID(),
+	val userId: UUID,
 	val type: NotificationType,
 	val title: String,
 	val message: String,
@@ -23,10 +24,10 @@ data class ConditionalReadResult(
 
 interface NotificationRepository {
 	fun insertIfAbsent(candidate: NewNotification): Boolean
-	fun findById(id: UUID): Notification?
-	fun findPage(read: Boolean?, pageable: Pageable): Page<Notification>
-	fun countUnread(): Long
+	fun findByIdAndUserId(id: UUID, userId: UUID): Notification?
+	fun findPage(userId: UUID, read: Boolean?, pageable: Pageable): Page<Notification>
+	fun countUnread(userId: UUID): Long
 	fun save(notification: Notification): Notification
-	fun markReadIfUnread(id: UUID, now: Instant): ConditionalReadResult?
-	fun markAllRead(now: Instant): Int
+	fun markReadIfUnread(id: UUID, userId: UUID, now: Instant): ConditionalReadResult?
+	fun markAllRead(userId: UUID, now: Instant): Int
 }

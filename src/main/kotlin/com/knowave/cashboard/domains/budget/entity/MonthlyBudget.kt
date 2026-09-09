@@ -5,10 +5,14 @@ import com.knowave.cashboard.domains.budget.service.dto.UpdateMonthlyBudgetComma
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
+import java.util.UUID
 
 @Entity
 @Table(name = "monthly_budgets")
 class MonthlyBudget(
+	@Column(name = "user_id", nullable = false, updatable = false)
+	val userId: UUID,
+
 	@Column(name = "target_month", nullable = false, unique = true, length = 7)
 	var targetMonth: String,
 

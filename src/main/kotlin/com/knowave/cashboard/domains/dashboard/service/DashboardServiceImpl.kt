@@ -7,6 +7,7 @@ import com.knowave.cashboard.domains.fixedexpense.repository.FixedExpenseReposit
 import com.knowave.cashboard.domains.loan.repository.LoanRepository
 import com.knowave.cashboard.domains.simulation.entity.EarlyRepaymentDecision
 import org.springframework.stereotype.Service
+import java.util.UUID
 
 @Service
 class DashboardServiceImpl(
@@ -14,9 +15,9 @@ class DashboardServiceImpl(
 	private val fixedExpenseRepository: FixedExpenseRepository,
 	private val loanRepository: LoanRepository,
 ) : DashboardService {
-	override fun getDashboard(): DashboardResult {
-		val accounts = accountRepository.findAll()
-		val loans = loanRepository.findAll()
+	override fun getDashboard(userId: UUID): DashboardResult {
+		val accounts = accountRepository.findAllByUserId(userId)
+		val loans = loanRepository.findAllByUserId(userId)
 
         val liquidCash = accounts
 			.filter { AccountType.from(it.type) == AccountType.LIQUID }
@@ -36,7 +37,7 @@ class DashboardServiceImpl(
 
         val totalAccountBalance = accounts.sumOf { it.balance }
 		val totalLoanBalance = loans.sumOf { it.currentBalance }
-		val monthlyFixedExpense = fixedExpenseRepository.findAll().sumOf { it.amount }
+		val monthlyFixedExpense = fixedExpenseRepository.findAllByUserId(userId).sumOf { it.amount }
 		val monthlyLoanPayment = loans.sumOf { it.monthlyPayment }
 		val possibleAmount = liquidCash - EMERGENCY_RESERVE_THRESHOLD
 		val decision = EarlyRepaymentDecision.fromAvailableAmount(possibleAmount)

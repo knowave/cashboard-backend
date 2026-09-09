@@ -32,6 +32,7 @@ class RepositorySimulationContextProviderTest {
 
 	private lateinit var provider: RepositorySimulationContextProvider
 	private val loanId = UUID.fromString("00000000-0000-0000-0000-000000000001")
+	private val userId = UUID.fromString("00000000-0000-0000-0000-000000000002")
 
 	@BeforeEach
 	fun setUp() {
@@ -41,18 +42,18 @@ class RepositorySimulationContextProviderTest {
 
 	@Test
 	fun `계좌와 직전 완료 3개월 지출을 하나의 대출 시뮬레이션 Context로 만든다`() {
-		given(accountRepository.findAll()).willReturn(
+		given(accountRepository.findAllByUserId(userId)).willReturn(
 			listOf(
-				Account("생활비", "LIQUID", 5_000_000L),
-				Account("비상금", "EMERGENCY", 3_000_000L),
-				Account("투자", "INVESTMENT", 9_000_000L),
+				Account(userId, "생활비", "LIQUID", 5_000_000L),
+				Account(userId, "비상금", "EMERGENCY", 3_000_000L),
+				Account(userId, "투자", "INVESTMENT", 9_000_000L),
 			),
 		)
-		given(expenseRepository.findMonthlyExpenses(LocalDate.of(2026, 5, 1), LocalDate.of(2026, 8, 1)))
+		given(expenseRepository.findMonthlyExpenses(userId, LocalDate.of(2026, 5, 1), LocalDate.of(2026, 8, 1)))
 			.willReturn(listOf(expense("2026-06", 1_200_000L), expense("2026-07", 1_600_000L)))
-		given(loanRepository.findById(loanId)).willReturn(loan(loanId))
+		given(loanRepository.findByIdAndUserId(loanId, userId)).willReturn(loan(loanId))
 
-		val result = provider.loadLoanRepaymentContext(loanId)
+		val result = provider.loadLoanRepaymentContext(userId, loanId)
 
 		assertThat(result.baseDate).isEqualTo(LocalDate.of(2026, 8, 31))
 		assertThat(result.liquidAssetAmount).isEqualTo(5_000_000L)
@@ -61,16 +62,16 @@ class RepositorySimulationContextProviderTest {
 		assertThat(result.expenseHistoryMonthCount).isEqualTo(2)
 		assertThat(result.loan.currentBalance).isEqualTo(26_000_000L)
 		assertThat(result.loan.monthlyPaymentAmount).isEqualTo(500_000L)
-		verify(expenseRepository).findMonthlyExpenses(LocalDate.of(2026, 5, 1), LocalDate.of(2026, 8, 1))
+		verify(expenseRepository).findMonthlyExpenses(userId, LocalDate.of(2026, 5, 1), LocalDate.of(2026, 8, 1))
 	}
 
 	@Test
 	fun `지출 이력이 없으면 평균 0과 이력 개수 0을 반환한다`() {
-		given(accountRepository.findAll()).willReturn(emptyList())
-		given(expenseRepository.findMonthlyExpenses(LocalDate.of(2026, 5, 1), LocalDate.of(2026, 8, 1)))
+		given(accountRepository.findAllByUserId(userId)).willReturn(emptyList())
+		given(expenseRepository.findMonthlyExpenses(userId, LocalDate.of(2026, 5, 1), LocalDate.of(2026, 8, 1)))
 			.willReturn(emptyList())
 
-		val result = provider.loadLiquidityContext()
+		val result = provider.loadLiquidityContext(userId)
 
 		assertThat(result.averageMonthlyExpenseAmount).isZero()
 		assertThat(result.expenseHistoryMonthCount).isZero()
@@ -78,12 +79,12 @@ class RepositorySimulationContextProviderTest {
 
 	@Test
 	fun `대출이 없으면 NotFoundException을 던진다`() {
-		given(accountRepository.findAll()).willReturn(emptyList())
-		given(expenseRepository.findMonthlyExpenses(LocalDate.of(2026, 5, 1), LocalDate.of(2026, 8, 1)))
+		given(accountRepository.findAllByUserId(userId)).willReturn(emptyList())
+		given(expenseRepository.findMonthlyExpenses(userId, LocalDate.of(2026, 5, 1), LocalDate.of(2026, 8, 1)))
 			.willReturn(emptyList())
-		given(loanRepository.findById(loanId)).willReturn(null)
+		given(loanRepository.findByIdAndUserId(loanId, userId)).willReturn(null)
 
-		assertThatThrownBy { provider.loadLoanRepaymentContext(loanId) }
+		assertThatThrownBy { provider.loadLoanRepaymentContext(userId, loanId) }
 			.isInstanceOf(NotFoundException::class.java)
 	}
 
@@ -93,6 +94,7 @@ class RepositorySimulationContextProviderTest {
 	}
 
 	private fun loan(id: UUID): Loan = Loan(
+		userId = userId,
 		principal = 30_000_000L,
 		annualInterestRate = BigDecimal("5.0"),
 		monthlyPayment = 500_000L,

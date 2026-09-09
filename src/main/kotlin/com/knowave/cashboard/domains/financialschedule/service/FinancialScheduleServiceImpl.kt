@@ -27,8 +27,9 @@ class FinancialScheduleServiceImpl(
 	private val financialScheduleRepository: FinancialScheduleRepository,
 ) : FinancialScheduleService {
 	@Transactional
-	override fun create(command: CreateFinancialScheduleCommand): FinancialScheduleResult {
+	override fun create(userId: UUID, command: CreateFinancialScheduleCommand): FinancialScheduleResult {
 		val schedule = FinancialSchedule.create(
+			userId = userId,
 			type = ScheduleType.from(command.type),
 			title = command.title,
 			amount = command.amount,
@@ -38,13 +39,17 @@ class FinancialScheduleServiceImpl(
 		return toResult(financialScheduleRepository.save(schedule))
 	}
 
-	override fun get(id: UUID): FinancialScheduleResult = toResult(findSchedule(id))
+	override fun get(userId: UUID, id: UUID): FinancialScheduleResult = toResult(findSchedule(userId, id))
 
-	override fun getAll(): List<FinancialScheduleResult> =
-		financialScheduleRepository.findAllOrderByCreatedAtDesc().map(::toResult)
+	override fun getAll(userId: UUID): List<FinancialScheduleResult> =
+		financialScheduleRepository.findAllOrderByCreatedAtDesc(userId).map(::toResult)
 
 	@Transactional
-	override fun patch(id: UUID, command: PatchFinancialScheduleCommand): FinancialScheduleResult {
+	override fun patch(
+		userId: UUID,
+		id: UUID,
+		command: PatchFinancialScheduleCommand,
+	): FinancialScheduleResult {
 		if (command.isEmpty()) {
 			throw EmptyFinancialSchedulePatchException()
 		}
@@ -53,7 +58,7 @@ class FinancialScheduleServiceImpl(
 		val amount = command.amount.presentValue("amount")
 		val direction = command.direction.presentValue("direction")?.let(CashFlowDirection::from)
 		val recurrence = command.recurrence.presentValue("recurrence")?.toRecurrenceRule()
-		val schedule = findSchedule(id)
+		val schedule = findSchedule(userId, id)
 		schedule.update(
 			type = type,
 			title = title,
@@ -65,12 +70,12 @@ class FinancialScheduleServiceImpl(
 	}
 
 	@Transactional
-	override fun delete(id: UUID) {
-		financialScheduleRepository.delete(findSchedule(id))
+	override fun delete(userId: UUID, id: UUID) {
+		financialScheduleRepository.delete(findSchedule(userId, id))
 	}
 
-	private fun findSchedule(id: UUID): FinancialSchedule =
-		financialScheduleRepository.findById(id) ?: throw NotFoundException("FinancialSchedule", id)
+	private fun findSchedule(userId: UUID, id: UUID): FinancialSchedule =
+		financialScheduleRepository.findByIdAndUserId(id, userId) ?: throw NotFoundException("FinancialSchedule", id)
 
 	private fun toResult(schedule: FinancialSchedule): FinancialScheduleResult {
 		validatePersistedEnum(schedule, "scheduleType", schedule.scheduleType) { ScheduleType.from(it) }

@@ -6,8 +6,8 @@ import java.util.UUID
 
 interface FinancialScheduleRepository {
 	fun save(schedule: FinancialSchedule): FinancialSchedule
-	fun findById(id: UUID): FinancialSchedule?
-	fun findAllOrderByCreatedAtDesc(): List<FinancialSchedule>
-	fun findCandidates(from: LocalDate, toInclusive: LocalDate): List<FinancialSchedule>
+	fun findByIdAndUserId(id: UUID, userId: UUID): FinancialSchedule?
+	fun findAllOrderByCreatedAtDesc(userId: UUID): List<FinancialSchedule>
+	fun findCandidates(userId: UUID, from: LocalDate, toInclusive: LocalDate): List<FinancialSchedule>
 	fun delete(schedule: FinancialSchedule)
 }

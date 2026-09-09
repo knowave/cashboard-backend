@@ -16,6 +16,7 @@ import java.util.UUID
 
 class LegacyEarlyRepaymentAdapterTest {
 	private val loanId = UUID.fromString("00000000-0000-0000-0000-000000000001")
+	private val userId = UUID.fromString("00000000-0000-0000-0000-000000000002")
 	private val provider = StubProvider()
 	private val policy = EmergencyFundPolicy()
 	private val facade = SimulationFacade(provider, policy, LoanRepaymentCalculator())
@@ -24,6 +25,7 @@ class LegacyEarlyRepaymentAdapterTest {
 	@Test
 	fun `대출 ID가 없어도 기존 유동성 응답을 반환한다`() {
 		val result = adapter.simulate(
+			userId,
 			EarlyRepaymentSimulationCommand(
 				emergencyReserveThreshold = 4_000_000L,
 				targetLoanId = null,
@@ -41,6 +43,7 @@ class LegacyEarlyRepaymentAdapterTest {
 	@Test
 	fun `대출 ID가 있으면 기존 임계값을 override로 사용하고 기존 필드로 축소한다`() {
 		val result = adapter.simulate(
+			userId,
 			EarlyRepaymentSimulationCommand(
 				emergencyReserveThreshold = 4_000_000L,
 				targetLoanId = loanId,
@@ -59,6 +62,7 @@ class LegacyEarlyRepaymentAdapterTest {
 		provider.loanBalance = 2_000_000L
 
 		val result = adapter.simulate(
+			userId,
 			EarlyRepaymentSimulationCommand(
 				emergencyReserveThreshold = 0L,
 				targetLoanId = loanId,
@@ -82,9 +86,9 @@ class LegacyEarlyRepaymentAdapterTest {
 			expenseHistoryMonthCount = 3,
 		)
 
-		override fun loadLiquidityContext(): LiquidityContext = liquidity
+		override fun loadLiquidityContext(userId: UUID): LiquidityContext = liquidity
 
-		override fun loadLoanRepaymentContext(loanId: UUID) = SimulationContext(
+		override fun loadLoanRepaymentContext(userId: UUID, loanId: UUID) = SimulationContext(
 			baseDate = liquidity.baseDate,
 			liquidAssetAmount = liquidity.liquidAssetAmount,
 			emergencyAssetAmount = liquidity.emergencyAssetAmount,

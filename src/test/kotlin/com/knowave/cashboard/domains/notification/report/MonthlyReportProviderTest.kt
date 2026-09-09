@@ -20,6 +20,7 @@ import java.time.YearMonth
 import java.util.UUID
 
 class MonthlyReportProviderTest {
+	private val userId = UUID.randomUUID()
 	private val expenseAnalysisService = FixedExpenseAnalysisService()
 	private val assetGoalRepository = FixedAssetGoalRepository()
 	private val accountRepository = FixedAccountRepository()
@@ -38,14 +39,14 @@ class MonthlyReportProviderTest {
 			),
 		)
 		assetGoalRepository.goals = listOf(
-			AssetGoal("먼 목표", 1_000_000, LocalDate.of(2027, 1, 1)),
-			AssetGoal("가까운 목표", 1_000_000, LocalDate.of(2026, 12, 1)),
+			goal("먼 목표", LocalDate.of(2027, 1, 1)),
+			goal("가까운 목표", LocalDate.of(2026, 12, 1)),
 		)
-		accountRepository.accounts = listOf(Account("입출금", "BANK", 400_000))
+		accountRepository.accounts = listOf(Account(userId, "입출금", "BANK", 400_000))
 
-		val summary = provider.generate(LocalDate.of(2026, 9, 1))
+		val summary = provider.generate(userId, LocalDate.of(2026, 9, 1))
 
-		assertThat(expenseAnalysisService.requested).isEqualTo(2026 to 8)
+		assertThat(expenseAnalysisService.requested).isEqualTo(Triple(userId, 2026, 8))
 		assertThat(summary.yearMonth).isEqualTo(YearMonth.of(2026, 8))
 		assertThat(summary.totalExpense).isEqualTo(310_000)
 		assertThat(summary.previousMonthDifferenceRate).isEqualTo(10.0)
@@ -67,7 +68,7 @@ class MonthlyReportProviderTest {
 			),
 		)
 
-		val summary = provider.generate(LocalDate.of(2026, 9, 1))
+		val summary = provider.generate(userId, LocalDate.of(2026, 9, 1))
 
 		assertThat(summary.topCategories).containsExactly("여가", "교통", "식비")
 		assertThat(summary.previousMonthDifferenceRate).isNull()
@@ -78,7 +79,7 @@ class MonthlyReportProviderTest {
 	fun `지출이 없는 달은 지출 없음 메시지를 만든다`() {
 		expenseAnalysisService.result = analysis(0, null, emptyList())
 
-		val summary = provider.generate(LocalDate.of(2026, 9, 1))
+		val summary = provider.generate(userId, LocalDate.of(2026, 9, 1))
 
 		assertThat(summary.toMessage()).isEqualTo("지난달에는 지출이 없었어요.")
 	}
@@ -86,11 +87,11 @@ class MonthlyReportProviderTest {
 	@Test
 	fun `현재 자산 합계가 Long 범위를 넘으면 계산을 중단한다`() {
 		accountRepository.accounts = listOf(
-			Account("첫 계좌", "BANK", Long.MAX_VALUE),
-			Account("두 번째 계좌", "BANK", 1),
+			Account(userId, "첫 계좌", "BANK", Long.MAX_VALUE),
+			Account(userId, "두 번째 계좌", "BANK", 1),
 		)
 
-		assertThatThrownBy { provider.generate(LocalDate.of(2026, 9, 1)) }
+		assertThatThrownBy { provider.generate(userId, LocalDate.of(2026, 9, 1)) }
 			.isInstanceOf(ArithmeticException::class.java)
 	}
 
@@ -103,7 +104,7 @@ class MonthlyReportProviderTest {
 		val earlierId = goal("작은 ID", sameDate, LocalDateTime.of(2026, 1, 1, 0, 0), UUID.fromString("00000000-0000-0000-0000-000000000001"))
 		assetGoalRepository.goals = listOf(nullMetadata, laterCreated, laterId, earlierId)
 
-		val summary = provider.generate(LocalDate.of(2026, 9, 1))
+		val summary = provider.generate(userId, LocalDate.of(2026, 9, 1))
 
 		assertThat(summary.assetGoalName).isEqualTo("작은 ID")
 	}
@@ -116,7 +117,7 @@ class MonthlyReportProviderTest {
 			goal("생성 시각 있음", targetDate, LocalDateTime.of(2026, 1, 1, 0, 0), null),
 		)
 
-		val summary = provider.generate(LocalDate.of(2026, 9, 1))
+		val summary = provider.generate(userId, LocalDate.of(2026, 9, 1))
 
 		assertThat(summary.assetGoalName).isEqualTo("생성 시각 있음")
 	}
@@ -130,8 +131,10 @@ class MonthlyReportProviderTest {
 		trend = emptyList(),
 	)
 
+	private fun goal(name: String, targetDate: LocalDate): AssetGoal = AssetGoal(userId, name, 1_000_000, targetDate)
+
 	private fun goal(name: String, targetDate: LocalDate, createdAt: LocalDateTime?, id: UUID?): AssetGoal =
-		AssetGoal(name, 1_000_000, targetDate).also {
+		AssetGoal(userId, name, 1_000_000, targetDate).also {
 			it.createdAt = createdAt
 			val idField = it.javaClass.superclass.getDeclaredField("id")
 			idField.isAccessible = true
@@ -140,10 +143,10 @@ class MonthlyReportProviderTest {
 }
 
 private class FixedExpenseAnalysisService : ExpenseAnalysisService {
-	var requested: Pair<Int, Int>? = null
+	var requested: Triple<UUID, Int, Int>? = null
 	var result = ExpenseAnalysisResult(PeriodResult(2026, 8), 0, ExpenseComparisonResult(0, 0, null), RecentAverageResult(0, 0), emptyList(), emptyList())
-	override fun getAnalysis(year: Int, month: Int): ExpenseAnalysisResult {
-		requested = year to month
+	override fun getAnalysis(userId: UUID, year: Int, month: Int): ExpenseAnalysisResult {
+		requested = Triple(userId, year, month)
 		return result
 	}
 }
@@ -151,15 +154,15 @@ private class FixedExpenseAnalysisService : ExpenseAnalysisService {
 private class FixedAssetGoalRepository : AssetGoalRepository {
 	var goals: List<AssetGoal> = emptyList()
 	override fun save(assetGoal: AssetGoal) = assetGoal
-	override fun findById(id: java.util.UUID) = null
-	override fun findAll() = goals
+	override fun findByIdAndUserId(id: UUID, userId: UUID) = null
+	override fun findAllByUserId(userId: UUID) = goals
 	override fun delete(assetGoal: AssetGoal) = Unit
 }
 
 private class FixedAccountRepository : AccountRepository {
 	var accounts: List<Account> = emptyList()
 	override fun save(account: Account) = account
-	override fun findById(id: java.util.UUID) = null
-	override fun findAll() = accounts
+	override fun findByIdAndUserId(id: UUID, userId: UUID) = null
+	override fun findAllByUserId(userId: UUID) = accounts
 	override fun delete(account: Account) = Unit
 }

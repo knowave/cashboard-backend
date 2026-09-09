@@ -13,6 +13,10 @@ import com.knowave.cashboard.domains.simulation.service.dto.LoanRepaymentSimulat
 import com.knowave.cashboard.domains.simulation.service.dto.LoanRepaymentSimulationResult
 import org.junit.jupiter.api.Test
 import org.mockito.BDDMockito.given
+import com.knowave.cashboard.support.WithAuthenticatedUser
+import com.knowave.cashboard.common.config.ClockConfig
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
+import org.springframework.context.annotation.Import
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.http.MediaType
@@ -25,15 +29,25 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
 
+// ponytail: 슬라이스 테스트는 매핑·검증을 검증한다. 보안 체인은 전용 테스트의 몫이므로
+// 필터를 끈다 — @WebMvcTest는 우리 SecurityConfig를 로드하지 않고 Boot 기본 설정을
+// 쓰기 때문에 CSRF가 켜져 비-GET이 403을 받는다. @AuthenticationPrincipal은
+// SecurityContextHolder에서 해석되므로 필터를 꺼도 @WithAuthenticatedUser가 동작한다.
+@AutoConfigureMockMvc(addFilters = false)
+@WithAuthenticatedUser
+@Import(ClockConfig::class)
 @WebMvcTest(SimulationController::class)
 class SimulationControllerTest {
 	@Autowired private lateinit var mockMvc: MockMvc
 	@MockitoBean private lateinit var simulationService: SimulationService
 	@MockitoBean private lateinit var simulationFacade: SimulationFacade
 
+	// Controller의 TEMP_USER_ID(TODO Stage 2)와 동일한 placeholder.
+	private val tempUserId = UUID.fromString("00000000-0000-0000-0000-000000000000")
+
 	@Test
 	fun `대출 조기상환 상세 결과를 반환한다`() {
-		given(simulationFacade.simulateLoanRepayment(loanRepaymentCommand(5_000_000L)))
+		given(simulationFacade.simulateLoanRepayment(tempUserId, loanRepaymentCommand(5_000_000L)))
 			.willReturn(result())
 
 		mockMvc.perform(
@@ -84,7 +98,7 @@ class SimulationControllerTest {
 	@Test
 	fun `존재하지 않는 대출이면 404를 반환한다`() {
 		val loanId = UUID.fromString("00000000-0000-0000-0000-000000000001")
-		given(simulationFacade.simulateLoanRepayment(loanRepaymentCommand(1_000_000L)))
+		given(simulationFacade.simulateLoanRepayment(tempUserId, loanRepaymentCommand(1_000_000L)))
 			.willThrow(NotFoundException("Loan", loanId))
 
 		mockMvc.perform(
@@ -107,6 +121,7 @@ class SimulationControllerTest {
 	fun `기존 early repayment 경로와 응답 필드를 유지한다`() {
 		given(
 			simulationService.simulateEarlyRepayment(
+				tempUserId,
 				EarlyRepaymentSimulationCommand(
 					emergencyReserveThreshold = 4_000_000L,
 					targetLoanId = UUID.fromString("00000000-0000-0000-0000-000000000001"),

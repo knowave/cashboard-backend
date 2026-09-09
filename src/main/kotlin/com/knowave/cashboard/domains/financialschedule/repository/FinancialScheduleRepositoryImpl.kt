@@ -11,13 +11,14 @@ class FinancialScheduleRepositoryImpl(
 ) : FinancialScheduleRepository {
 	override fun save(schedule: FinancialSchedule): FinancialSchedule = financialScheduleJpaRepository.save(schedule)
 
-	override fun findById(id: UUID): FinancialSchedule? = financialScheduleJpaRepository.findById(id).orElse(null)
+	override fun findByIdAndUserId(id: UUID, userId: UUID): FinancialSchedule? =
+		financialScheduleJpaRepository.findByIdAndUserId(id, userId)
 
-	override fun findAllOrderByCreatedAtDesc(): List<FinancialSchedule> =
-		financialScheduleJpaRepository.findAllByOrderByCreatedAtDescIdAsc()
+	override fun findAllOrderByCreatedAtDesc(userId: UUID): List<FinancialSchedule> =
+		financialScheduleJpaRepository.findAllByUserIdOrderByCreatedAtDescIdAsc(userId)
 
-	override fun findCandidates(from: LocalDate, toInclusive: LocalDate): List<FinancialSchedule> =
-		financialScheduleJpaRepository.findCandidates(from, toInclusive)
+	override fun findCandidates(userId: UUID, from: LocalDate, toInclusive: LocalDate): List<FinancialSchedule> =
+		financialScheduleJpaRepository.findCandidates(userId, from, toInclusive)
 
 	override fun delete(schedule: FinancialSchedule) {
 		financialScheduleJpaRepository.delete(schedule)

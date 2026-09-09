@@ -18,12 +18,13 @@ class NotificationRepositoryImpl(
 ) : NotificationRepository {
 	override fun insertIfAbsent(candidate: NewNotification): Boolean = jdbcTemplate.update(
 		"""
-			INSERT INTO notifications(id, type, title, message, status, scheduled_at, deduplication_key, created_at, updated_at)
-			VALUES (:id, :type, :title, :message, 'PENDING', :scheduledAt, :deduplicationKey, LOCALTIMESTAMP, LOCALTIMESTAMP)
+			INSERT INTO notifications(id, user_id, type, title, message, status, scheduled_at, deduplication_key, created_at, updated_at)
+			VALUES (:id, :userId, :type, :title, :message, 'PENDING', :scheduledAt, :deduplicationKey, LOCALTIMESTAMP, LOCALTIMESTAMP)
 			ON CONFLICT (deduplication_key) DO NOTHING
 		""".trimIndent(),
 		mapOf(
 			"id" to candidate.id,
+			"userId" to candidate.userId,
 			"type" to candidate.type.name,
 			"title" to candidate.title,
 			"message" to candidate.message,
@@ -32,29 +33,29 @@ class NotificationRepositoryImpl(
 		),
 	) == 1
 
-	override fun findById(id: UUID): Notification? = notificationJpaRepository.findById(id).orElse(null)
+	override fun findByIdAndUserId(id: UUID, userId: UUID): Notification? = notificationJpaRepository.findByIdAndUserId(id, userId)
 
-	override fun findPage(read: Boolean?, pageable: Pageable): Page<Notification> {
+	override fun findPage(userId: UUID, read: Boolean?, pageable: Pageable): Page<Notification> {
 		val orderedPageable = PageRequestWithNotificationOrder.of(pageable)
 		return when (read) {
-			null -> notificationJpaRepository.findAll(orderedPageable)
-			true -> notificationJpaRepository.findAllByReadAtIsNotNull(orderedPageable)
-			false -> notificationJpaRepository.findAllByReadAtIsNull(orderedPageable)
+			null -> notificationJpaRepository.findAllByUserId(userId, orderedPageable)
+			true -> notificationJpaRepository.findAllByUserIdAndReadAtIsNotNull(userId, orderedPageable)
+			false -> notificationJpaRepository.findAllByUserIdAndReadAtIsNull(userId, orderedPageable)
 		}
 	}
 
-	override fun countUnread(): Long = notificationJpaRepository.countByReadAtIsNull()
+	override fun countUnread(userId: UUID): Long = notificationJpaRepository.countByUserIdAndReadAtIsNull(userId)
 
 	override fun save(notification: Notification): Notification = notificationJpaRepository.save(notification)
 
 	@Transactional
-	override fun markReadIfUnread(id: UUID, now: Instant): ConditionalReadResult? {
-		val changed = notificationJpaRepository.markReadIfUnread(id, now) == 1
-		val notification = notificationJpaRepository.findById(id).orElse(null) ?: return null
+	override fun markReadIfUnread(id: UUID, userId: UUID, now: Instant): ConditionalReadResult? {
+		val changed = notificationJpaRepository.markReadIfUnread(id, userId, now) == 1
+		val notification = notificationJpaRepository.findByIdAndUserId(id, userId) ?: return null
 		return ConditionalReadResult(notification, changed)
 	}
 
-	override fun markAllRead(now: Instant): Int = notificationJpaRepository.markAllRead(now)
+	override fun markAllRead(userId: UUID, now: Instant): Int = notificationJpaRepository.markAllRead(userId, now)
 }
 
 private object PageRequestWithNotificationOrder {

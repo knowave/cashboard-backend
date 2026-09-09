@@ -9,6 +9,10 @@ import com.knowave.cashboard.common.exception.NotificationNotFoundException
 import com.knowave.cashboard.domains.notification.entity.NotificationStatus
 import com.knowave.cashboard.domains.notification.entity.NotificationType
 import org.junit.jupiter.api.Test
+import com.knowave.cashboard.support.WithAuthenticatedUser
+import com.knowave.cashboard.common.config.ClockConfig
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
+import org.springframework.context.annotation.Import
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.test.context.bean.override.mockito.MockitoBean
@@ -21,15 +25,25 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 
+// ponytail: 슬라이스 테스트는 매핑·검증을 검증한다. 보안 체인은 전용 테스트의 몫이므로
+// 필터를 끈다 — @WebMvcTest는 우리 SecurityConfig를 로드하지 않고 Boot 기본 설정을
+// 쓰기 때문에 CSRF가 켜져 비-GET이 403을 받는다. @AuthenticationPrincipal은
+// SecurityContextHolder에서 해석되므로 필터를 꺼도 @WithAuthenticatedUser가 동작한다.
+@AutoConfigureMockMvc(addFilters = false)
+@WithAuthenticatedUser
+@Import(ClockConfig::class)
 @WebMvcTest(NotificationController::class)
 class NotificationControllerTest {
     @Autowired lateinit var mockMvc: MockMvc
     @MockitoBean lateinit var queryService: NotificationQueryService
     @MockitoBean lateinit var commandService: NotificationCommandService
 
+    // @AuthenticationPrincipal AuthenticatedUser.userId와 동일한 placeholder.
+    private val tempUserId = UUID.fromString("00000000-0000-0000-0000-000000000000")
+
     @Test
     fun `알림 목록은 페이지와 읽음 필터를 반환한다`() {
-        given(queryService.getPage(0, 20, false)).willReturn(
+        given(queryService.getPage(tempUserId, 0, 20, false)).willReturn(
             NotificationPageResult(emptyList(), 0, 20, 0, 0, false),
         )
         mockMvc.perform(get("/notifications").param("page", "0").param("size", "20").param("read", "false"))
@@ -41,7 +55,7 @@ class NotificationControllerTest {
 
     @Test
     fun `페이지 크기가 100을 초과하면 잘못된 페이지 오류를 반환한다`() {
-        given(queryService.getPage(0, 101, null)).willThrow(
+        given(queryService.getPage(tempUserId, 0, 101, null)).willThrow(
             InvalidNotificationPageException("size must be between 1 and 100."),
         )
         mockMvc.perform(get("/notifications").param("size", "101"))
@@ -51,7 +65,7 @@ class NotificationControllerTest {
 
     @Test
     fun `음수 페이지는 잘못된 페이지 오류를 반환한다`() {
-        given(queryService.getPage(-1, 20, null)).willThrow(InvalidNotificationPageException("invalid page"))
+        given(queryService.getPage(tempUserId, -1, 20, null)).willThrow(InvalidNotificationPageException("invalid page"))
         mockMvc.perform(get("/notifications").param("page", "-1"))
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.data.code").value("INVALID_NOTIFICATION_PAGE"))
@@ -59,7 +73,7 @@ class NotificationControllerTest {
 
     @Test
     fun `알림 상세 조회는 성공 envelope와 상세 데이터를 반환한다`() {
-        given(queryService.get(notificationId)).willReturn(notificationResult())
+        given(queryService.get(tempUserId, notificationId)).willReturn(notificationResult())
         mockMvc.perform(get("/notifications/{id}", notificationId))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.success").value(true))
@@ -69,7 +83,7 @@ class NotificationControllerTest {
 
     @Test
     fun `미읽음 개수 조회는 개수를 반환한다`() {
-        given(queryService.countUnread()).willReturn(3L)
+        given(queryService.countUnread(tempUserId)).willReturn(3L)
         mockMvc.perform(get("/notifications/unread-count"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.success").value(true))
@@ -78,7 +92,7 @@ class NotificationControllerTest {
 
     @Test
     fun `개별 읽음 처리는 반환된 알림을 envelope로 감싼다`() {
-        given(commandService.markRead(notificationId)).willReturn(notificationResult(readAt = Instant.parse("2026-09-03T01:00:00Z")))
+        given(commandService.markRead(tempUserId, notificationId)).willReturn(notificationResult(readAt = Instant.parse("2026-09-03T01:00:00Z")))
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/notifications/{id}/read", notificationId))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.success").value(true))
@@ -87,7 +101,7 @@ class NotificationControllerTest {
 
     @Test
     fun `전체 읽음 처리는 처리 건수를 반환한다`() {
-        given(commandService.markAllRead()).willReturn(3)
+        given(commandService.markAllRead(tempUserId)).willReturn(3)
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/notifications/read-all"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.data.count").value(3))
@@ -95,7 +109,7 @@ class NotificationControllerTest {
 
     @Test
     fun `존재하지 않는 알림 상세 조회는 404를 반환한다`() {
-        given(queryService.get(notificationId)).willThrow(NotificationNotFoundException(notificationId))
+        given(queryService.get(tempUserId, notificationId)).willThrow(NotificationNotFoundException(notificationId))
         mockMvc.perform(get("/notifications/{id}", notificationId))
             .andExpect(status().isNotFound)
             .andExpect(jsonPath("$.data.code").value("NOTIFICATION_NOT_FOUND"))

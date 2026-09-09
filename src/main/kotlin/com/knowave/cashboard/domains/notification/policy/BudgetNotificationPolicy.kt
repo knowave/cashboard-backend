@@ -10,7 +10,7 @@ import java.math.BigInteger
 class BudgetNotificationPolicy {
 	fun evaluate(event: BudgetUsageChangedEvent): ThresholdNotificationDecision {
 		if (event.previousBudgetAmount <= 0 || event.currentBudgetAmount <= 0) {
-			return ThresholdNotificationDecision(emptyList(), null, null)
+			return ThresholdNotificationDecision(event.userId, emptyList(), null, null)
 		}
 
 		val crossedThresholds = THRESHOLDS.filter { threshold ->
@@ -27,6 +27,7 @@ class BudgetNotificationPolicy {
 		val selectedKey = selectedThreshold?.let { threshold -> policyKey(event, threshold) }
 
 		return ThresholdNotificationDecision(
+			userId = event.userId,
 			crossedPolicyKeys = crossedKeys,
 			selectedPolicyKey = selectedKey,
 			notification = selectedThreshold?.let { threshold -> notification(event, threshold, requireNotNull(selectedKey)) },
@@ -54,6 +55,7 @@ class BudgetNotificationPolicy {
 			.multiply(HUNDRED)
 			.divide(BigInteger.valueOf(event.currentBudgetAmount))
 		return NewNotification(
+			userId = event.userId,
 			type = type,
 			title = title,
 			message = "현재 예산 사용률은 $usageRate%예요.",

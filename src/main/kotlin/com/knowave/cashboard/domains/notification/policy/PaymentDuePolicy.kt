@@ -10,16 +10,18 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import java.util.UUID
 
 @Component
 class PaymentDuePolicy {
-	fun evaluate(baseDate: LocalDate, occurrence: ScheduleOccurrence, scheduledAt: Instant): NewNotification? {
+	fun evaluate(baseDate: LocalDate, occurrence: ScheduleOccurrence, scheduledAt: Instant, userId: UUID): NewNotification? {
 		if (occurrence.direction != CashFlowDirection.EXPENSE) return null
 
 		val offset = ChronoUnit.DAYS.between(baseDate, occurrence.date).toInt()
 		if (offset !in OFFSETS) return null
 
 		return NewNotification(
+			userId = userId,
 			type = NotificationType.PAYMENT_DUE,
 			title = "결제 예정 알림",
 			message = paymentMessage(occurrence, offset),

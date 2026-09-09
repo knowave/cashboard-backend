@@ -2,13 +2,15 @@ package com.knowave.cashboard.domains.assetgoal.service.dto
 
 import com.knowave.cashboard.domains.assetgoal.entity.AssetGoal
 import java.time.LocalDate
+import java.util.UUID
 
 data class CreateAssetGoalCommand(
 	val name: String,
 	val targetAmount: Long,
 	val targetDate: LocalDate,
 ) {
-	fun toEntity(): AssetGoal = AssetGoal(
+	fun toEntity(userId: UUID): AssetGoal = AssetGoal(
+		userId = userId,
 		name = name,
 		targetAmount = targetAmount,
 		targetDate = targetDate,

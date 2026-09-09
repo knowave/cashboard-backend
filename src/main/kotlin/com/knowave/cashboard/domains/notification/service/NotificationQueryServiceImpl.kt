@@ -16,10 +16,10 @@ import java.util.UUID
 class NotificationQueryServiceImpl(
 	private val notificationRepository: NotificationRepository,
 ) : NotificationQueryService {
-	override fun getPage(page: Int, size: Int, read: Boolean?): NotificationPageResult {
+	override fun getPage(userId: UUID, page: Int, size: Int, read: Boolean?): NotificationPageResult {
 		validatePage(page, size)
 		val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")))
-		val notifications = notificationRepository.findPage(read, pageable)
+		val notifications = notificationRepository.findPage(userId, read, pageable)
 		return NotificationPageResult(
 			content = notifications.content.map { it.toResult() },
 			page = notifications.number,
@@ -30,10 +30,10 @@ class NotificationQueryServiceImpl(
 		)
 	}
 
-	override fun get(id: UUID): NotificationResult =
-		notificationRepository.findById(id)?.toResult() ?: throw NotificationNotFoundException(id)
+	override fun get(userId: UUID, id: UUID): NotificationResult =
+		notificationRepository.findByIdAndUserId(id, userId)?.toResult() ?: throw NotificationNotFoundException(id)
 
-	override fun countUnread(): Long = notificationRepository.countUnread()
+	override fun countUnread(userId: UUID): Long = notificationRepository.countUnread(userId)
 
 	private fun validatePage(page: Int, size: Int) {
 		if (page < 0) throw InvalidNotificationPageException("page must be greater than or equal to 0. page=$page")

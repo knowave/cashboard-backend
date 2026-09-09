@@ -2,6 +2,7 @@ package com.knowave.cashboard.domains.notification.service
 
 import com.knowave.cashboard.common.exception.InvalidEnumValueException
 import com.knowave.cashboard.common.exception.NotificationDataIntegrityException
+import com.knowave.cashboard.common.exception.PersistedEntityIdMissingException
 import com.knowave.cashboard.domains.notification.entity.Notification
 import com.knowave.cashboard.domains.notification.entity.NotificationStatus
 import com.knowave.cashboard.domains.notification.entity.NotificationType
@@ -10,7 +11,7 @@ import org.slf4j.LoggerFactory
 import java.util.UUID
 
 fun Notification.toResult(): NotificationResult {
-	val notificationId = requireNotNull(id) { "Persisted notification id must not be null" }
+	val notificationId = id ?: throw PersistedEntityIdMissingException("Notification")
 	return NotificationResult(
 		id = notificationId,
 		type = type.toNotificationType(notificationId),

@@ -28,35 +28,36 @@ class BudgetStrategyServiceImplTest {
 	private val eventPublisher = RecordingEventPublisher()
 	private val clock = Clock.fixed(Instant.parse("2026-09-02T00:00:00Z"), ZoneOffset.UTC)
 	private val service = BudgetStrategyServiceImpl(monthlyBudgetRepository, budgetExpenseRepository, eventPublisher, clock)
+	private val userId = UUID.fromString("11111111-1111-1111-1111-111111111111")
 	private val budgetId = UUID.fromString("22222222-2222-2222-2222-222222222222")
 
 	@BeforeEach
 	fun setUp() {
-		monthlyBudgetRepository.save(MonthlyBudget("2026-09", 100, 70).withId(budgetId))
+		monthlyBudgetRepository.save(MonthlyBudget(userId, "2026-09", 100, 70).withId(budgetId))
 		operationTrace.clear()
 	}
 
 	@Test
 	fun `예산 생성은 초기 사용액과 함께 이벤트를 발행한다`() {
-		val result = service.create(CreateMonthlyBudgetCommand("2026-10", 100, 80))
+		val result = service.create(userId, CreateMonthlyBudgetCommand("2026-10", 100, 80))
 
 		assertThat(eventPublisher.events.single()).isEqualTo(
-			BudgetUsageChangedEvent(result.id, 100, 0, 100, 80, clock.instant()),
+			BudgetUsageChangedEvent(userId, result.id, 100, 0, 100, 80, clock.instant()),
 		)
 	}
 
 	@Test
 	fun `예산 수정은 저장 전후 금액 이벤트를 발행한다`() {
-		service.update(budgetId, UpdateMonthlyBudgetCommand("2026-09", 120, 96))
+		service.update(userId, budgetId, UpdateMonthlyBudgetCommand("2026-09", 120, 96))
 
 		assertThat(eventPublisher.events.single()).isEqualTo(
-			BudgetUsageChangedEvent(budgetId, 100, 70, 120, 96, clock.instant()),
+			BudgetUsageChangedEvent(userId, budgetId, 100, 70, 120, 96, clock.instant()),
 		)
 	}
 
 	@Test
 	fun `예산 수정은 변경 전 비관적 잠금 조회를 사용한다`() {
-		service.update(budgetId, UpdateMonthlyBudgetCommand("2026-09", 120, 96))
+		service.update(userId, budgetId, UpdateMonthlyBudgetCommand("2026-09", 120, 96))
 
 		assertThat(monthlyBudgetRepository.lockedLookupCount).isEqualTo(1)
 		assertThat(operationTrace).containsExactly("monthlyBudget.lock", "monthlyBudget.save")
@@ -64,31 +65,31 @@ class BudgetStrategyServiceImplTest {
 
 	@Test
 	fun `직접 사용액 변경은 저장 전후 사용액 이벤트를 발행한다`() {
-		service.updateUsedAmount(budgetId, UpdateUsedAmountCommand(95))
+		service.updateUsedAmount(userId, budgetId, UpdateUsedAmountCommand(95))
 
 		assertThat(eventPublisher.events.single()).isEqualTo(
-			BudgetUsageChangedEvent(budgetId, 100, 70, 100, 95, clock.instant()),
+			BudgetUsageChangedEvent(userId, budgetId, 100, 70, 100, 95, clock.instant()),
 		)
 		assertThat(operationTrace).containsExactly("monthlyBudget.lock", "monthlyBudget.save")
 	}
 
 	@Test
 	fun `지출 추가는 저장 전후 사용액 이벤트를 발행한다`() {
-		service.addExpense(budgetId, CreateBudgetExpenseCommand(25, "식비", null, LocalDate.of(2026, 9, 2)))
+		service.addExpense(userId, budgetId, CreateBudgetExpenseCommand(25, "식비", null, LocalDate.of(2026, 9, 2)))
 
 		assertThat(eventPublisher.events.single()).isEqualTo(
-			BudgetUsageChangedEvent(budgetId, 100, 70, 100, 95, clock.instant()),
+			BudgetUsageChangedEvent(userId, budgetId, 100, 70, 100, 95, clock.instant()),
 		)
 		assertThat(operationTrace).containsExactly("monthlyBudget.lock", "budgetExpense.save", "monthlyBudget.save")
 	}
 
 	@Test
 	fun `지출 삭제는 사용액 이벤트를 발행하지 않는다`() {
-		val budget = monthlyBudgetRepository.findById(budgetId)!!
+		val budget = monthlyBudgetRepository.findByIdAndUserId(budgetId, userId)!!
 		val expense = budgetExpenseRepository.save(BudgetExpense(budget, 25, null, null, LocalDate.of(2026, 9, 2)))
 		operationTrace.clear()
 
-		service.deleteExpense(budgetId, requireNotNull(expense.id))
+		service.deleteExpense(userId, budgetId, requireNotNull(expense.id))
 
 		assertThat(eventPublisher.events).isEmpty()
 		assertThat(operationTrace).containsExactly("monthlyBudget.lock", "budgetExpense.find", "monthlyBudget.save", "budgetExpense.delete")
@@ -113,18 +114,21 @@ private class FakeMonthlyBudgetRepository(
 		budgets[requireNotNull(monthlyBudget.id)] = monthlyBudget
 		return monthlyBudget
 	}
-	override fun findById(id: UUID): MonthlyBudget? {
+	override fun findByIdAndUserId(id: UUID, userId: UUID): MonthlyBudget? {
 		operationTrace += "monthlyBudget.find"
-		return budgets[id]
+		return budgets[id]?.takeIf { it.userId == userId }
 	}
-	override fun findByIdForUpdate(id: UUID): MonthlyBudget? {
+	override fun findByIdForUpdate(id: UUID, userId: UUID): MonthlyBudget? {
 		operationTrace += "monthlyBudget.lock"
 		lockedLookupCount += 1
-		return budgets[id]
+		return budgets[id]?.takeIf { it.userId == userId }
 	}
-	override fun findByTargetMonth(targetMonth: String): MonthlyBudget? = budgets.values.firstOrNull { it.targetMonth == targetMonth }
-	override fun existsById(id: UUID): Boolean = id in budgets
-	override fun existsByTargetMonth(targetMonth: String): Boolean = budgets.values.any { it.targetMonth == targetMonth }
+	override fun findByTargetMonthAndUserId(targetMonth: String, userId: UUID): MonthlyBudget? =
+		budgets.values.firstOrNull { it.targetMonth == targetMonth && it.userId == userId }
+	override fun existsByIdAndUserId(id: UUID, userId: UUID): Boolean =
+		budgets[id]?.userId == userId
+	override fun existsByTargetMonthAndUserId(targetMonth: String, userId: UUID): Boolean =
+		budgets.values.any { it.targetMonth == targetMonth && it.userId == userId }
 }
 
 private class FakeBudgetExpenseRepository(
@@ -137,12 +141,14 @@ private class FakeBudgetExpenseRepository(
 		expenses[requireNotNull(budgetExpense.id)] = budgetExpense
 		return budgetExpense
 	}
-	override fun findById(id: UUID): BudgetExpense? {
+	override fun findByIdAndUserId(id: UUID, userId: UUID): BudgetExpense? {
 		operationTrace += "budgetExpense.find"
-		return expenses[id]
+		return expenses[id]?.takeIf { it.userId == userId }
 	}
-	override fun findAllByMonthlyBudgetIdOrderBySpentAtDesc(monthlyBudgetId: UUID): List<BudgetExpense> =
-		expenses.values.filter { it.monthlyBudget.id == monthlyBudgetId }.sortedByDescending { it.spentAt }
+	override fun findAllByMonthlyBudgetIdAndUserIdOrderBySpentAtDesc(monthlyBudgetId: UUID, userId: UUID): List<BudgetExpense> =
+		expenses.values
+			.filter { it.monthlyBudget.id == monthlyBudgetId && it.userId == userId }
+			.sortedByDescending { it.spentAt }
 	override fun delete(budgetExpense: BudgetExpense) {
 		operationTrace += "budgetExpense.delete"
 		expenses.remove(budgetExpense.id)

@@ -5,6 +5,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import java.time.Instant
+import java.util.UUID
 
 class NotificationTest {
 	@Test
@@ -39,6 +40,7 @@ class NotificationTest {
 	}
 
 	private fun notification() = Notification.create(
+		userId = UUID.randomUUID(),
 		type = NotificationType.PAYMENT_DUE,
 		title = "결제 예정",
 		message = "내일 카드대금 520,000원이 예정되어 있어요.",

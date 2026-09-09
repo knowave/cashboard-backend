@@ -16,15 +16,18 @@ import java.util.UUID
 
 class SimulationFacadeTest {
 	private val loanId = UUID.fromString("00000000-0000-0000-0000-000000000001")
+	private val userId = UUID.fromString("00000000-0000-0000-0000-000000000002")
 	private val provider = StubContextProvider(context())
 	private val facade = SimulationFacade(provider, EmergencyFundPolicy(), LoanRepaymentCalculator())
 
 	@Test
 	fun `Context 정책 계산기 결과를 상세 결과로 조합한다`() {
 		val result = facade.simulateLoanRepayment(
+			userId,
 			LoanRepaymentSimulationCommand(loanId = loanId, prepaymentAmount = 5_000_000L),
 		)
 
+		assertThat(provider.requestedUserId).isEqualTo(userId)
 		assertThat(provider.requestedLoanId).isEqualTo(loanId)
 		assertThat(result.requestedPrepaymentAmount).isEqualTo(5_000_000L)
 		assertThat(result.appliedPrepaymentAmount).isEqualTo(3_500_000L)
@@ -37,11 +40,13 @@ class SimulationFacadeTest {
 	}
 
 	private class StubContextProvider(private val value: SimulationContext) : SimulationContextProvider {
+		var requestedUserId: UUID? = null
 		var requestedLoanId: UUID? = null
 
-		override fun loadLiquidityContext(): LiquidityContext = value.toLiquidityContext()
+		override fun loadLiquidityContext(userId: UUID): LiquidityContext = value.toLiquidityContext()
 
-		override fun loadLoanRepaymentContext(loanId: UUID): SimulationContext {
+		override fun loadLoanRepaymentContext(userId: UUID, loanId: UUID): SimulationContext {
+			requestedUserId = userId
 			requestedLoanId = loanId
 			return value
 		}

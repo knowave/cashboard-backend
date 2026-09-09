@@ -35,32 +35,32 @@ class BudgetStrategyServiceImpl(
 	private val clock: Clock,
 ) : BudgetStrategyService {
 	@Transactional
-	override fun create(command: CreateMonthlyBudgetCommand): MonthlyBudgetResult {
+	override fun create(userId: UUID, command: CreateMonthlyBudgetCommand): MonthlyBudgetResult {
 		validateTargetMonth(command.targetMonth)
-		if (monthlyBudgetRepository.existsByTargetMonth(command.targetMonth)) {
+		if (monthlyBudgetRepository.existsByTargetMonthAndUserId(command.targetMonth, userId)) {
 			throw DuplicateMonthlyBudgetException(command.targetMonth)
 		}
 
-		val monthlyBudget = command.toEntity()
+		val monthlyBudget = command.toEntity(userId)
 
 		val saved = monthlyBudgetRepository.save(monthlyBudget)
-		publishUsageChanged(saved, saved.monthlyBudget, 0L)
+		publishUsageChanged(userId, saved, saved.monthlyBudget, 0L)
 		return saved.toMonthlyBudgetResult()
 	}
 
-	override fun getByTargetMonth(targetMonth: String): MonthlyBudgetResult {
+	override fun getByTargetMonth(userId: UUID, targetMonth: String): MonthlyBudgetResult {
 		validateTargetMonth(targetMonth)
-		val monthlyBudget = monthlyBudgetRepository.findByTargetMonth(targetMonth)
+		val monthlyBudget = monthlyBudgetRepository.findByTargetMonthAndUserId(targetMonth, userId)
 			?: throw MonthlyBudgetNotFoundException(targetMonth)
 		return monthlyBudget.toMonthlyBudgetResult()
 	}
 
 	@Transactional
-	override fun update(id: UUID, command: UpdateMonthlyBudgetCommand): MonthlyBudgetResult {
+	override fun update(userId: UUID, id: UUID, command: UpdateMonthlyBudgetCommand): MonthlyBudgetResult {
 		validateTargetMonth(command.targetMonth)
-		val monthlyBudget = monthlyBudgetRepository.findByIdForUpdate(id)
+		val monthlyBudget = monthlyBudgetRepository.findByIdForUpdate(id, userId)
 			?: throw MonthlyBudgetNotFoundException(id)
-		val existingBudget = monthlyBudgetRepository.findByTargetMonth(command.targetMonth)
+		val existingBudget = monthlyBudgetRepository.findByTargetMonthAndUserId(command.targetMonth, userId)
 
 		if (existingBudget != null && existingBudget.id != id) {
 			throw DuplicateMonthlyBudgetException(command.targetMonth)
@@ -71,25 +71,25 @@ class BudgetStrategyServiceImpl(
 		val updatedMonthlyBudget = MonthlyBudget.applyUpdate(monthlyBudget, command)
 
 		val saved = monthlyBudgetRepository.save(updatedMonthlyBudget)
-		publishUsageChanged(saved, previousBudget, previousUsed)
+		publishUsageChanged(userId, saved, previousBudget, previousUsed)
 		return saved.toMonthlyBudgetResult()
 	}
 
 	@Transactional
-	override fun updateUsedAmount(id: UUID, command: UpdateUsedAmountCommand): MonthlyBudgetResult {
-		val monthlyBudget = monthlyBudgetRepository.findByIdForUpdate(id)
+	override fun updateUsedAmount(userId: UUID, id: UUID, command: UpdateUsedAmountCommand): MonthlyBudgetResult {
+		val monthlyBudget = monthlyBudgetRepository.findByIdForUpdate(id, userId)
 			?: throw MonthlyBudgetNotFoundException(id)
 		val previousBudget = monthlyBudget.monthlyBudget
 		val previousUsed = monthlyBudget.usedAmount
 		monthlyBudget.updateUsedAmount(command.usedAmount)
 		val saved = monthlyBudgetRepository.save(monthlyBudget)
-		publishUsageChanged(saved, previousBudget, previousUsed)
+		publishUsageChanged(userId, saved, previousBudget, previousUsed)
 		return saved.toMonthlyBudgetResult()
 	}
 
 	@Transactional
-	override fun addExpense(id: UUID, command: CreateBudgetExpenseCommand): MonthlyBudgetResult {
-		val monthlyBudget = monthlyBudgetRepository.findByIdForUpdate(id)
+	override fun addExpense(userId: UUID, id: UUID, command: CreateBudgetExpenseCommand): MonthlyBudgetResult {
+		val monthlyBudget = monthlyBudgetRepository.findByIdForUpdate(id, userId)
 			?: throw MonthlyBudgetNotFoundException(id)
 		val previousBudget = monthlyBudget.monthlyBudget
 		val previousUsed = monthlyBudget.usedAmount
@@ -98,23 +98,23 @@ class BudgetStrategyServiceImpl(
 		budgetExpenseRepository.save(budgetExpense)
 		monthlyBudget.addUsedAmount(command.amount)
 		val saved = monthlyBudgetRepository.save(monthlyBudget)
-		publishUsageChanged(saved, previousBudget, previousUsed)
+		publishUsageChanged(userId, saved, previousBudget, previousUsed)
 		return saved.toMonthlyBudgetResult()
 	}
 
-	override fun getExpenses(id: UUID): List<BudgetExpenseResult> {
-		if (!monthlyBudgetRepository.existsById(id)) {
+	override fun getExpenses(userId: UUID, id: UUID): List<BudgetExpenseResult> {
+		if (!monthlyBudgetRepository.existsByIdAndUserId(id, userId)) {
 			throw MonthlyBudgetNotFoundException(id)
 		}
-		return budgetExpenseRepository.findAllByMonthlyBudgetIdOrderBySpentAtDesc(id)
+		return budgetExpenseRepository.findAllByMonthlyBudgetIdAndUserIdOrderBySpentAtDesc(id, userId)
 			.map { it.toBudgetExpenseResult() }
 	}
 
 	@Transactional
-	override fun deleteExpense(monthlyBudgetId: UUID, expenseId: UUID): Boolean {
-		val monthlyBudget = monthlyBudgetRepository.findByIdForUpdate(monthlyBudgetId)
+	override fun deleteExpense(userId: UUID, monthlyBudgetId: UUID, expenseId: UUID): Boolean {
+		val monthlyBudget = monthlyBudgetRepository.findByIdForUpdate(monthlyBudgetId, userId)
 			?: throw MonthlyBudgetNotFoundException(monthlyBudgetId)
-		val budgetExpense = budgetExpenseRepository.findById(expenseId)
+		val budgetExpense = budgetExpenseRepository.findByIdAndUserId(expenseId, userId)
 			?: throw BudgetExpenseNotFoundException(expenseId)
 
 		if (budgetExpense.monthlyBudget.id != monthlyBudgetId) {
@@ -161,9 +161,10 @@ class BudgetStrategyServiceImpl(
 		updatedAt = requireNotNull(updatedAt),
 	)
 
-	private fun publishUsageChanged(saved: MonthlyBudget, previousBudget: Long, previousUsed: Long) {
+	private fun publishUsageChanged(userId: UUID, saved: MonthlyBudget, previousBudget: Long, previousUsed: Long) {
 		eventPublisher.publishEvent(
 			BudgetUsageChangedEvent(
+				userId = userId,
 				monthlyBudgetId = requireNotNull(saved.id),
 				previousBudgetAmount = previousBudget,
 				previousUsedAmount = previousUsed,

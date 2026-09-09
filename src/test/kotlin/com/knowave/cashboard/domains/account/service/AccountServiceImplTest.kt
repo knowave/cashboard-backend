@@ -19,6 +19,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 class AccountServiceImplTest {
+	private val userId = UUID.fromString("00000000-0000-0000-0000-0000000000aa")
 	private val operations = mutableListOf<String>()
 	private val repository = InMemoryAccountRepository(operations)
 	private val eventPublisher = RecordingEventPublisher()
@@ -33,13 +34,13 @@ class AccountServiceImplTest {
 
 	@Test
 	fun `계좌 생성은 저장 전후 총자산 변경 이벤트를 발행한다`() {
-		repository.save(Account("현금", "LIQUID", 40L))
+		repository.save(Account(userId, "현금", "LIQUID", 40L))
 		operations.clear()
 
-		service.create(CreateAccountCommand("예금", AccountType.LIQUID, 60L))
+		service.create(userId, CreateAccountCommand("예금", AccountType.LIQUID, 60L))
 
 		assertThat(eventPublisher.events).containsExactly(
-			TotalAssetAmountChangedEvent(40L, 100L, fixedInstant),
+			TotalAssetAmountChangedEvent(userId, 40L, 100L, fixedInstant),
 		)
 		assertThat(operations).containsExactly("lock", "findAll", "save")
 	}
@@ -47,13 +48,13 @@ class AccountServiceImplTest {
 	@Test
 	fun `계좌 수정은 전체 자산 변경 이벤트를 발행한다`() {
 		val accountId = UUID.fromString("00000000-0000-0000-0000-000000000001")
-		repository.save(Account("현금", "LIQUID", 40L).also { it.assignBaseFields(accountId) })
+		repository.save(Account(userId, "현금", "LIQUID", 40L).also { it.assignBaseFields(accountId) })
 		operations.clear()
 
-		service.update(accountId, UpdateAccountCommand("예금", AccountType.LIQUID, 100L))
+		service.update(userId, accountId, UpdateAccountCommand("예금", AccountType.LIQUID, 100L))
 
 		assertThat(eventPublisher.events).containsExactly(
-			TotalAssetAmountChangedEvent(40L, 100L, fixedInstant),
+			TotalAssetAmountChangedEvent(userId, 40L, 100L, fixedInstant),
 		)
 		assertThat(operations).containsExactly("lock", "findAll", "findById", "save")
 	}
@@ -61,10 +62,10 @@ class AccountServiceImplTest {
 	@Test
 	fun `계좌 삭제는 총자산 변경 이벤트를 발행하지 않는다`() {
 		val accountId = UUID.fromString("00000000-0000-0000-0000-000000000001")
-		repository.save(Account("현금", "LIQUID", 40L).also { it.assignBaseFields(accountId) })
+		repository.save(Account(userId, "현금", "LIQUID", 40L).also { it.assignBaseFields(accountId) })
 		operations.clear()
 
-		service.delete(accountId)
+		service.delete(userId, accountId)
 
 		assertThat(eventPublisher.events).isEmpty()
 		assertThat(operations).containsExactly("lock", "findById", "delete")
@@ -72,9 +73,9 @@ class AccountServiceImplTest {
 
 	@Test
 	fun `계좌 생성은 총자산 합계 overflow를 감지한다`() {
-		repository.save(Account("현금", "LIQUID", Long.MAX_VALUE))
+		repository.save(Account(userId, "현금", "LIQUID", Long.MAX_VALUE))
 
-		assertThatThrownBy { service.create(CreateAccountCommand("예금", AccountType.LIQUID, 1L)) }
+		assertThatThrownBy { service.create(userId, CreateAccountCommand("예금", AccountType.LIQUID, 1L)) }
 			.isInstanceOf(ArithmeticException::class.java)
 		assertThat(eventPublisher.events).isEmpty()
 	}
@@ -82,10 +83,10 @@ class AccountServiceImplTest {
 	@Test
 	fun `계좌 수정은 변경 전 잔액 차감 overflow를 감지한다`() {
 		val accountId = UUID.fromString("00000000-0000-0000-0000-000000000001")
-		repository.snapshot = listOf(Account("합계", "LIQUID", Long.MIN_VALUE))
-		repository.save(Account("현금", "LIQUID", 1L).also { it.assignBaseFields(accountId) })
+		repository.snapshot = listOf(Account(userId, "합계", "LIQUID", Long.MIN_VALUE))
+		repository.save(Account(userId, "현금", "LIQUID", 1L).also { it.assignBaseFields(accountId) })
 
-		assertThatThrownBy { service.update(accountId, UpdateAccountCommand("현금", AccountType.LIQUID, 2L)) }
+		assertThatThrownBy { service.update(userId, accountId, UpdateAccountCommand("현금", AccountType.LIQUID, 2L)) }
 			.isInstanceOf(ArithmeticException::class.java)
 		assertThat(eventPublisher.events).isEmpty()
 	}
@@ -104,14 +105,14 @@ private class InMemoryAccountRepository(
 		return account
 	}
 
-	override fun findById(id: UUID): Account? {
+	override fun findByIdAndUserId(id: UUID, userId: UUID): Account? {
 		operations += "findById"
-		return accounts[id]
+		return accounts[id]?.takeIf { it.userId == userId }
 	}
 
-	override fun findAll(): List<Account> {
+	override fun findAllByUserId(userId: UUID): List<Account> {
 		operations += "findAll"
-		return snapshot ?: accounts.values.toList()
+		return snapshot ?: accounts.values.filter { it.userId == userId }
 	}
 
 	override fun delete(account: Account) {
@@ -124,7 +125,7 @@ private class RecordingAccountBalanceLockRepository(
 	private val operations: MutableList<String>,
 ) : AccountBalanceLockRepository {
 
-	override fun acquireTotalAssetLock() {
+	override fun acquireTotalAssetLock(userId: UUID) {
 		operations += "lock"
 	}
 }

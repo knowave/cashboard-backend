@@ -23,19 +23,19 @@ class BalanceShortageNotificationJob(
 
 	override val name: String = "balance-shortage"
 
+	// ponytail: NotificationScheduleContext has no userId yet (Stage 4, out of this task's
+	// scope). PLACEHOLDER_USER_ID keeps this compiling as a single implicit user until
+	// Stage 4's scheduler iterates real users and threads userId through the context.
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	override fun run(context: NotificationScheduleContext) {
-		val occurrences = occurrenceSource.findOccurrences(context.date, context.date.plusDays(30))
-		val openingBalance = liquidityBalanceProvider.getCurrentLiquidBalance()
+		val userId = PLACEHOLDER_USER_ID
+		val occurrences = occurrenceSource.findOccurrences(userId, context.date, context.date.plusDays(30))
+		val openingBalance = liquidityBalanceProvider.getCurrentLiquidBalance(userId)
 		val projection = calculator.project(context.date, openingBalance, occurrences)
 		val shortage = policy.findFirstShortage(openingBalance, context.date, projection)
-		val transition = stateRepository.transition(SINGLE_USER_SCOPE_KEY, shortage?.date)
+		val transition = stateRepository.transition(userId, shortage?.date)
 		if (transition.newEpisode && shortage != null) {
-			generationService.createIfEnabled(policy.toNotification(shortage, transition.episode, context.scheduledAt))
+			generationService.createIfEnabled(userId, policy.toNotification(shortage, transition.episode, context.scheduledAt, userId))
 		}
-	}
-
-	private companion object {
-		const val SINGLE_USER_SCOPE_KEY = "SINGLE_USER"
 	}
 }

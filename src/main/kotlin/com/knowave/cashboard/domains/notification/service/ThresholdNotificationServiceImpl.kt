@@ -5,6 +5,7 @@ import com.knowave.cashboard.domains.notification.repository.NotificationPolicyM
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
+import java.util.UUID
 
 @Service
 class ThresholdNotificationServiceImpl(
@@ -12,11 +13,11 @@ class ThresholdNotificationServiceImpl(
 	private val generationService: NotificationGenerationService,
 ) : ThresholdNotificationService {
 	@Transactional
-	override fun process(decision: ThresholdNotificationDecision, occurredAt: Instant): Boolean {
-		val claimed = markerRepository.claimAll(decision.crossedPolicyKeys.toSet(), occurredAt)
+	override fun process(userId: UUID, decision: ThresholdNotificationDecision, occurredAt: Instant): Boolean {
+		val claimed = markerRepository.claimAll(userId, decision.crossedPolicyKeys.toSet(), occurredAt)
 		val selectedKey = decision.selectedPolicyKey ?: return false
 		val candidate = decision.notification ?: return false
 		if (selectedKey !in claimed) return false
-		return generationService.createIfEnabled(candidate)
+		return generationService.createIfEnabled(userId, candidate)
 	}
 }

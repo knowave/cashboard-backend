@@ -8,6 +8,7 @@ import com.knowave.cashboard.domains.simulation.service.dto.EarlyRepaymentSimula
 import com.knowave.cashboard.domains.simulation.service.dto.EarlyRepaymentSimulationResult
 import com.knowave.cashboard.domains.simulation.service.dto.LoanRepaymentSimulationCommand
 import org.springframework.stereotype.Component
+import java.util.UUID
 
 @Component
 class LegacyEarlyRepaymentAdapter(
@@ -15,10 +16,11 @@ class LegacyEarlyRepaymentAdapter(
 	private val emergencyFundPolicy: EmergencyFundPolicy,
 	private val simulationFacade: SimulationFacade,
 ) {
-	fun simulate(command: EarlyRepaymentSimulationCommand): EarlyRepaymentSimulationResult {
+	fun simulate(userId: UUID, command: EarlyRepaymentSimulationCommand): EarlyRepaymentSimulationResult {
 		val recommendation = emergencyFundPolicy.legacyRecommendation(command.emergencyReserveThreshold)
 		val detailed = command.targetLoanId?.let { loanId ->
 			simulationFacade.simulateLoanRepayment(
+				userId = userId,
 				command = LoanRepaymentSimulationCommand(
 					loanId = loanId,
 					prepaymentAmount = command.desiredRepaymentAmount ?: Long.MAX_VALUE,
@@ -27,7 +29,7 @@ class LegacyEarlyRepaymentAdapter(
 			)
 		}
 		val assessment = detailed?.liquidity ?: emergencyFundPolicy.assess(
-			context = contextProvider.loadLiquidityContext(),
+			context = contextProvider.loadLiquidityContext(userId),
 			recommendation = recommendation,
 			requestedPrepaymentAmount = command.desiredRepaymentAmount ?: Long.MAX_VALUE,
 			maximumRepaymentAmount = Long.MAX_VALUE,

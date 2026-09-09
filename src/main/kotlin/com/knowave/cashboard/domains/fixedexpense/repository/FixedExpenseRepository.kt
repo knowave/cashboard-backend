@@ -5,7 +5,7 @@ import java.util.UUID
 
 interface FixedExpenseRepository {
 	fun save(fixedExpense: FixedExpense): FixedExpense
-	fun findById(id: UUID): FixedExpense?
-	fun findAll(): List<FixedExpense>
+	fun findByIdAndUserId(id: UUID, userId: UUID): FixedExpense?
+	fun findAllByUserId(userId: UUID): List<FixedExpense>
 	fun delete(fixedExpense: FixedExpense)
 }

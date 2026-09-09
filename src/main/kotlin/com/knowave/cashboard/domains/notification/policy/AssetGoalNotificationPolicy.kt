@@ -10,6 +10,7 @@ import java.util.UUID
 @Component
 class AssetGoalNotificationPolicy {
 	fun evaluate(
+		userId: UUID,
 		goalId: UUID,
 		goalName: String,
 		previousTargetAmount: Long,
@@ -21,14 +22,14 @@ class AssetGoalNotificationPolicy {
 		if (previousTargetAmount <= 0L || currentTargetAmount <= 0L ||
 			!isRateIncreasing(previousAssetAmount, previousTargetAmount, currentAssetAmount, currentTargetAmount)
 		) {
-			return EMPTY_DECISION
+			return emptyDecision(userId)
 		}
 
 		val crossed = MILESTONES.filter { milestone ->
 			isBelow(previousAssetAmount, previousTargetAmount, milestone) &&
 				isAtLeast(currentAssetAmount, currentTargetAmount, milestone)
 		}
-		val selected = crossed.lastOrNull() ?: return EMPTY_DECISION
+		val selected = crossed.lastOrNull() ?: return emptyDecision(userId)
 		val selectedKey = policyKey(goalId, selected)
 		val type = if (selected == ACHIEVED_MILESTONE) {
 			NotificationType.ASSET_GOAL_ACHIEVED
@@ -43,9 +44,11 @@ class AssetGoalNotificationPolicy {
 		}
 
 		return ThresholdNotificationDecision(
+			userId = userId,
 			crossedPolicyKeys = crossed.map { policyKey(goalId, it) },
 			selectedPolicyKey = selectedKey,
 			notification = NewNotification(
+				userId = userId,
 				type = type,
 				title = if (selected == ACHIEVED_MILESTONE) "자산 목표 달성" else "자산 목표 진행",
 				message = message,
@@ -54,6 +57,8 @@ class AssetGoalNotificationPolicy {
 			),
 		)
 	}
+
+	private fun emptyDecision(userId: UUID) = ThresholdNotificationDecision(userId, emptyList(), null, null)
 
 	private fun isRateIncreasing(previousAssetAmount: Long, previousTargetAmount: Long, currentAssetAmount: Long, currentTargetAmount: Long): Boolean =
 		BigInteger.valueOf(currentAssetAmount).multiply(BigInteger.valueOf(previousTargetAmount)) >
@@ -68,7 +73,6 @@ class AssetGoalNotificationPolicy {
 	private fun policyKey(goalId: UUID, milestone: Int): String = "ASSET_GOAL:$goalId:$milestone"
 
 	private companion object {
-		val EMPTY_DECISION = ThresholdNotificationDecision(emptyList(), null, null)
 		val HUNDRED = BigInteger.valueOf(100L)
 		val MILESTONES = listOf(50, 80, 100)
 		const val ACHIEVED_MILESTONE = 100

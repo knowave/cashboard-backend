@@ -9,6 +9,10 @@ import com.knowave.cashboard.domains.expenseanalysis.service.dto.PeriodResult
 import com.knowave.cashboard.domains.expenseanalysis.service.dto.RecentAverageResult
 import org.junit.jupiter.api.Test
 import org.mockito.BDDMockito.given
+import com.knowave.cashboard.support.WithAuthenticatedUser
+import com.knowave.cashboard.common.config.ClockConfig
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
+import org.springframework.context.annotation.Import
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.test.context.bean.override.mockito.MockitoBean
@@ -16,7 +20,15 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.util.UUID
 
+// ponytail: 슬라이스 테스트는 매핑·검증을 검증한다. 보안 체인은 전용 테스트의 몫이므로
+// 필터를 끈다 — @WebMvcTest는 우리 SecurityConfig를 로드하지 않고 Boot 기본 설정을
+// 쓰기 때문에 CSRF가 켜져 비-GET이 403을 받는다. @AuthenticationPrincipal은
+// SecurityContextHolder에서 해석되므로 필터를 꺼도 @WithAuthenticatedUser가 동작한다.
+@AutoConfigureMockMvc(addFilters = false)
+@WithAuthenticatedUser
+@Import(ClockConfig::class)
 @WebMvcTest(ExpenseAnalysisController::class)
 class ExpenseAnalysisControllerTest {
 
@@ -25,6 +37,9 @@ class ExpenseAnalysisControllerTest {
 
 	@MockitoBean
 	private lateinit var expenseAnalysisService: ExpenseAnalysisService
+
+	// Controller의 TEMP_USER_ID(TODO Stage 2)와 동일한 placeholder.
+	private val tempUserId = UUID.fromString("00000000-0000-0000-0000-000000000000")
 
 	private fun fixtureResult(): ExpenseAnalysisResult = ExpenseAnalysisResult(
 		period = PeriodResult(year = 2026, month = 8),
@@ -45,7 +60,7 @@ class ExpenseAnalysisControllerTest {
 
 	@Test
 	fun `유효한 year와 month면 200과 분석 결과를 반환한다`() {
-		given(expenseAnalysisService.getAnalysis(2026, 8)).willReturn(fixtureResult())
+		given(expenseAnalysisService.getAnalysis(tempUserId, 2026, 8)).willReturn(fixtureResult())
 
 		mockMvc.perform(get("/expense-analysis").param("year", "2026").param("month", "8"))
 			.andExpect(status().isOk)

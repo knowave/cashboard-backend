@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.YearMonth
+import java.util.UUID
 
 @Service
 @Transactional(readOnly = true)
@@ -19,11 +20,11 @@ class ExpenseAnalysisServiceImpl(
 	private val expenseAnalysisRepository: ExpenseAnalysisRepository,
 ) : ExpenseAnalysisService {
 
-	override fun getAnalysis(year: Int, month: Int): ExpenseAnalysisResult {
+	override fun getAnalysis(userId: UUID, year: Int, month: Int): ExpenseAnalysisResult {
 		val yearMonth = YearMonth.of(year, month)
 
 		val categoryExpenses = expenseAnalysisRepository.findCategoryExpenses(
-			yearMonth.atDay(1), yearMonth.plusMonths(1).atDay(1),
+			userId, yearMonth.atDay(1), yearMonth.plusMonths(1).atDay(1),
 		)
 		val totalExpense = categoryExpenses.sumOf { it.amount }
 		val categories = categoryExpenses.map {
@@ -36,7 +37,7 @@ class ExpenseAnalysisServiceImpl(
 
 		val windowStart = yearMonth.minusMonths(maxOf(TREND_MONTHS - 1, RECENT_AVERAGE_MONTHS))
 		val monthly = expenseAnalysisRepository.findMonthlyExpenses(
-			windowStart.atDay(1), yearMonth.plusMonths(1).atDay(1),
+			userId, windowStart.atDay(1), yearMonth.plusMonths(1).atDay(1),
 		).associateBy { YearMonth.parse(it.yearMonth) }
 
 		val trendWindowStart = yearMonth.minusMonths(TREND_MONTHS - 1)

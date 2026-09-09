@@ -10,9 +10,10 @@ class FixedExpenseRepositoryImpl(
 ) : FixedExpenseRepository {
 	override fun save(fixedExpense: FixedExpense): FixedExpense = fixedExpenseJpaRepository.save(fixedExpense)
 
-	override fun findById(id: UUID): FixedExpense? = fixedExpenseJpaRepository.findById(id).orElse(null)
+	override fun findByIdAndUserId(id: UUID, userId: UUID): FixedExpense? =
+		fixedExpenseJpaRepository.findByIdAndUserId(id, userId)
 
-	override fun findAll(): List<FixedExpense> = fixedExpenseJpaRepository.findAll()
+	override fun findAllByUserId(userId: UUID): List<FixedExpense> = fixedExpenseJpaRepository.findAllByUserId(userId)
 
 	override fun delete(fixedExpense: FixedExpense) = fixedExpenseJpaRepository.delete(fixedExpense)
 }

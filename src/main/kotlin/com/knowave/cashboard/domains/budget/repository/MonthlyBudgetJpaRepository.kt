@@ -10,9 +10,14 @@ import java.util.UUID
 
 interface MonthlyBudgetJpaRepository : JpaRepository<MonthlyBudget, UUID> {
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
-	@Query("SELECT monthlyBudget FROM MonthlyBudget monthlyBudget WHERE monthlyBudget.id = :id")
-	fun findByIdForUpdate(@Param("id") id: UUID): MonthlyBudget?
+	@Query(
+		"SELECT monthlyBudget FROM MonthlyBudget monthlyBudget " +
+			"WHERE monthlyBudget.id = :id AND monthlyBudget.userId = :userId",
+	)
+	fun findByIdForUpdate(@Param("id") id: UUID, @Param("userId") userId: UUID): MonthlyBudget?
 
-	fun findByTargetMonth(targetMonth: String): MonthlyBudget?
-	fun existsByTargetMonth(targetMonth: String): Boolean
+	fun findByIdAndUserId(id: UUID, userId: UUID): MonthlyBudget?
+	fun findByTargetMonthAndUserId(targetMonth: String, userId: UUID): MonthlyBudget?
+	fun existsByIdAndUserId(id: UUID, userId: UUID): Boolean
+	fun existsByTargetMonthAndUserId(targetMonth: String, userId: UUID): Boolean
 }

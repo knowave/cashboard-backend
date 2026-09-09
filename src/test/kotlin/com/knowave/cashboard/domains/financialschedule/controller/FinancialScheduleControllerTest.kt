@@ -14,6 +14,10 @@ import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers
 import org.mockito.BDDMockito.given
 import org.mockito.BDDMockito.then
+import com.knowave.cashboard.support.WithAuthenticatedUser
+import com.knowave.cashboard.common.config.ClockConfig
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
+import org.springframework.context.annotation.Import
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.http.MediaType
@@ -29,6 +33,13 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
+// ponytail: 슬라이스 테스트는 매핑·검증을 검증한다. 보안 체인은 전용 테스트의 몫이므로
+// 필터를 끈다 — @WebMvcTest는 우리 SecurityConfig를 로드하지 않고 Boot 기본 설정을
+// 쓰기 때문에 CSRF가 켜져 비-GET이 403을 받는다. @AuthenticationPrincipal은
+// SecurityContextHolder에서 해석되므로 필터를 꺼도 @WithAuthenticatedUser가 동작한다.
+@AutoConfigureMockMvc(addFilters = false)
+@WithAuthenticatedUser
+@Import(ClockConfig::class)
 @WebMvcTest(FinancialScheduleController::class)
 class FinancialScheduleControllerTest {
 
@@ -39,10 +50,11 @@ class FinancialScheduleControllerTest {
 	private lateinit var financialScheduleService: FinancialScheduleService
 
 	private val scheduleId = UUID.fromString("3de248b5-f018-4295-991f-43e9804bb7fb")
+	private val tempUserId = UUID.fromString("00000000-0000-0000-0000-000000000000")
 
 	@Test
 	fun `생성 요청은 201과 월 반복 일정을 반환한다`() {
-		given(financialScheduleService.create(anyValue(createCommandFallback()))).willReturn(monthlyResult())
+		given(financialScheduleService.create(eqValue(tempUserId), anyValue(createCommandFallback()))).willReturn(monthlyResult())
 
 		mockMvc.perform(
 			post("/financial-schedules")
@@ -77,7 +89,7 @@ class FinancialScheduleControllerTest {
 	@Test
 	fun `공백을 제거하면 정확히 100자인 생성 제목은 Service까지 전달되어 성공한다`() {
 		val title = "a".repeat(100)
-		given(financialScheduleService.create(anyValue(createCommandFallback()))).willReturn(monthlyResult(title = title))
+		given(financialScheduleService.create(eqValue(tempUserId), anyValue(createCommandFallback()))).willReturn(monthlyResult(title = title))
 
 		mockMvc.perform(
 			post("/financial-schedules")
@@ -97,14 +109,14 @@ class FinancialScheduleControllerTest {
 			.andExpect(status().isCreated)
 
 		val captor = ArgumentCaptor.forClass(CreateFinancialScheduleCommand::class.java)
-		then(financialScheduleService).should().create(captureValue(captor, createCommandFallback()))
+		then(financialScheduleService).should().create(eqValue(tempUserId), captureValue(captor, createCommandFallback()))
 		check(captor.value.title == " $title ")
 	}
 
 	@Test
 	fun `공백을 제거해도 101자인 생성 제목은 400을 반환한다`() {
 		val title = "a".repeat(101)
-		given(financialScheduleService.create(anyValue(createCommandFallback()))).willThrow(
+		given(financialScheduleService.create(eqValue(tempUserId), anyValue(createCommandFallback()))).willThrow(
 			InvalidFinancialScheduleException("title must contain between 1 and 100 characters."),
 		)
 
@@ -129,7 +141,7 @@ class FinancialScheduleControllerTest {
 
 	@Test
 	fun `PATCH에서 누락된 필드는 Absent로 전달한다`() {
-		given(financialScheduleService.patch(anyValue(scheduleId), anyValue(PatchFinancialScheduleCommand()))).willReturn(monthlyResult(title = "변경"))
+		given(financialScheduleService.patch(eqValue(tempUserId), anyValue(scheduleId), anyValue(PatchFinancialScheduleCommand()))).willReturn(monthlyResult(title = "변경"))
 
 		mockMvc.perform(
 			patch("/financial-schedules/{id}", scheduleId)
@@ -140,7 +152,7 @@ class FinancialScheduleControllerTest {
 			.andExpect(jsonPath("$.data.title").value("변경"))
 
 		val captor = ArgumentCaptor.forClass(PatchFinancialScheduleCommand::class.java)
-		then(financialScheduleService).should().patch(eqValue(scheduleId), captureValue(captor, PatchFinancialScheduleCommand()))
+		then(financialScheduleService).should().patch(eqValue(tempUserId), eqValue(scheduleId), captureValue(captor, PatchFinancialScheduleCommand()))
 		val command = captor.value
 		check(command.title == PatchField.Present("변경"))
 		check(command.type == PatchField.Absent)
@@ -151,7 +163,7 @@ class FinancialScheduleControllerTest {
 
 	@Test
 	fun `PATCH의 명시적 null은 서비스 검증 오류 400으로 반환한다`() {
-		given(financialScheduleService.patch(anyValue(scheduleId), anyValue(PatchFinancialScheduleCommand()))).willThrow(InvalidFinancialScheduleException("title must not be null."))
+		given(financialScheduleService.patch(eqValue(tempUserId), anyValue(scheduleId), anyValue(PatchFinancialScheduleCommand()))).willThrow(InvalidFinancialScheduleException("title must not be null."))
 
 		mockMvc.perform(
 			patch("/financial-schedules/{id}", scheduleId)
@@ -162,13 +174,13 @@ class FinancialScheduleControllerTest {
 			.andExpect(jsonPath("$.data.code").value("VALIDATION_ERROR"))
 
 		val captor = ArgumentCaptor.forClass(PatchFinancialScheduleCommand::class.java)
-		then(financialScheduleService).should().patch(eqValue(scheduleId), captureValue(captor, PatchFinancialScheduleCommand()))
+		then(financialScheduleService).should().patch(eqValue(tempUserId), eqValue(scheduleId), captureValue(captor, PatchFinancialScheduleCommand()))
 		check(captor.value.title == PatchField.Present(null))
 	}
 
 	@Test
 	fun `PATCH recurrence는 명시적 종료일 null을 포함해 전체 규칙으로 전달한다`() {
-		given(financialScheduleService.patch(anyValue(scheduleId), anyValue(PatchFinancialScheduleCommand()))).willReturn(monthlyResult())
+		given(financialScheduleService.patch(eqValue(tempUserId), anyValue(scheduleId), anyValue(PatchFinancialScheduleCommand()))).willReturn(monthlyResult())
 
 		mockMvc.perform(
 			patch("/financial-schedules/{id}", scheduleId)
@@ -189,7 +201,7 @@ class FinancialScheduleControllerTest {
 			.andExpect(status().isOk)
 
 		val captor = ArgumentCaptor.forClass(PatchFinancialScheduleCommand::class.java)
-		then(financialScheduleService).should().patch(eqValue(scheduleId), captureValue(captor, PatchFinancialScheduleCommand()))
+		then(financialScheduleService).should().patch(eqValue(tempUserId), eqValue(scheduleId), captureValue(captor, PatchFinancialScheduleCommand()))
 		val command = captor.value
 		check(
 			command.recurrence == PatchField.Present(
@@ -209,7 +221,7 @@ class FinancialScheduleControllerTest {
 
 	@Test
 	fun `빈 PATCH는 EMPTY_PATCH 400을 반환한다`() {
-		given(financialScheduleService.patch(anyValue(scheduleId), anyValue(PatchFinancialScheduleCommand()))).willThrow(
+		given(financialScheduleService.patch(eqValue(tempUserId), anyValue(scheduleId), anyValue(PatchFinancialScheduleCommand()))).willThrow(
 			com.knowave.cashboard.common.exception.EmptyFinancialSchedulePatchException(),
 		)
 
@@ -248,8 +260,8 @@ class FinancialScheduleControllerTest {
 
 	@Test
 	fun `목록과 단건 조회는 성공 응답을 반환한다`() {
-		given(financialScheduleService.getAll()).willReturn(listOf(monthlyResult()))
-		given(financialScheduleService.get(scheduleId)).willReturn(monthlyResult())
+		given(financialScheduleService.getAll(tempUserId)).willReturn(listOf(monthlyResult()))
+		given(financialScheduleService.get(tempUserId, scheduleId)).willReturn(monthlyResult())
 
 		mockMvc.perform(get("/financial-schedules"))
 			.andExpect(status().isOk)
@@ -269,7 +281,7 @@ class FinancialScheduleControllerTest {
 
 	@Test
 	fun `서비스의 NotFoundException은 404로 반환한다`() {
-		given(financialScheduleService.get(scheduleId)).willThrow(NotFoundException("FinancialSchedule", scheduleId))
+		given(financialScheduleService.get(tempUserId, scheduleId)).willThrow(NotFoundException("FinancialSchedule", scheduleId))
 
 		mockMvc.perform(get("/financial-schedules/{id}", scheduleId))
 			.andExpect(status().isNotFound)

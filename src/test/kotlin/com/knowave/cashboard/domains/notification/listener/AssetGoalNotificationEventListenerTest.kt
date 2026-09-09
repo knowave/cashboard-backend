@@ -16,6 +16,7 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 class AssetGoalNotificationEventListenerTest {
+	private val userId = UUID.randomUUID()
 	private val goals = FakeAssetGoalRepository()
 	private val thresholdService = RecordingThresholdNotificationService()
 	private val occurredAt = Instant.parse("2026-09-02T00:00:00Z")
@@ -26,11 +27,11 @@ class AssetGoalNotificationEventListenerTest {
 		val firstGoalId = UUID.fromString("00000000-0000-0000-0000-000000000001")
 		val secondGoalId = UUID.fromString("00000000-0000-0000-0000-000000000002")
 		goals.goals = listOf(
-			AssetGoal("첫 목표", 100L, LocalDate.now().plusMonths(1)).also { it.assignBaseFields(firstGoalId) },
-			AssetGoal("둘째 목표", 200L, LocalDate.now().plusMonths(1)).also { it.assignBaseFields(secondGoalId) },
+			AssetGoal(userId, "첫 목표", 100L, LocalDate.now().plusMonths(1)).also { it.assignBaseFields(firstGoalId) },
+			AssetGoal(userId, "둘째 목표", 200L, LocalDate.now().plusMonths(1)).also { it.assignBaseFields(secondGoalId) },
 		)
 
-		listener.on(TotalAssetAmountChangedEvent(40L, 105L, occurredAt))
+		listener.on(TotalAssetAmountChangedEvent(userId, 40L, 105L, occurredAt))
 
 		assertThat(thresholdService.decisions.map { it.crossedPolicyKeys }).containsExactly(
 			listOf("ASSET_GOAL:$firstGoalId:50", "ASSET_GOAL:$firstGoalId:80", "ASSET_GOAL:$firstGoalId:100"),
@@ -40,10 +41,31 @@ class AssetGoalNotificationEventListenerTest {
 	}
 
 	@Test
+	fun `AC-20e 총자산 변경은 이벤트 사용자의 목표만 처리하고 다른 사용자의 목표는 건드리지 않는다`() {
+		val otherUserId = UUID.randomUUID()
+		val myGoalId = UUID.fromString("00000000-0000-0000-0000-000000000001")
+		val otherGoalId = UUID.fromString("00000000-0000-0000-0000-000000000002")
+		goals.goals = listOf(
+			AssetGoal(userId, "내 목표", 100L, LocalDate.now().plusMonths(1)).also { it.assignBaseFields(myGoalId) },
+			AssetGoal(otherUserId, "남의 목표", 100L, LocalDate.now().plusMonths(1)).also { it.assignBaseFields(otherGoalId) },
+		)
+
+		listener.on(TotalAssetAmountChangedEvent(userId, 40L, 105L, occurredAt))
+
+		assertThat(thresholdService.decisions).hasSize(1)
+		assertThat(thresholdService.decisions.single().userId).isEqualTo(userId)
+		assertThat(thresholdService.decisions.single().crossedPolicyKeys).containsExactly(
+			"ASSET_GOAL:$myGoalId:50",
+			"ASSET_GOAL:$myGoalId:80",
+			"ASSET_GOAL:$myGoalId:100",
+		)
+	}
+
+	@Test
 	fun `목표 변경은 해당 목표의 변경 전후 금액으로 처리한다`() {
 		val goalId = UUID.fromString("00000000-0000-0000-0000-000000000001")
 
-		listener.on(AssetGoalChangedEvent(goalId, "내 집", 200L, 100L, 80L, 80L, occurredAt))
+		listener.on(AssetGoalChangedEvent(userId, goalId, "내 집", 200L, 100L, 80L, 80L, occurredAt))
 
 		assertThat(thresholdService.decisions.single().crossedPolicyKeys).containsExactly(
 			"ASSET_GOAL:$goalId:50",
@@ -56,7 +78,7 @@ class AssetGoalNotificationEventListenerTest {
 	fun `목표 생성은 0에서 현재 자산 달성률까지 통과한 모든 marker와 최고 단계 후보를 처리한다`() {
 		val goalId = UUID.fromString("00000000-0000-0000-0000-000000000001")
 
-		listener.on(AssetGoalChangedEvent(goalId, "내 집", 100L, 100L, 0L, 105L, occurredAt))
+		listener.on(AssetGoalChangedEvent(userId, goalId, "내 집", 100L, 100L, 0L, 105L, occurredAt))
 
 		assertThat(thresholdService.decisions.single().crossedPolicyKeys).containsExactly(
 			"ASSET_GOAL:$goalId:50",
@@ -70,15 +92,15 @@ class AssetGoalNotificationEventListenerTest {
 private class FakeAssetGoalRepository : AssetGoalRepository {
 	var goals: List<AssetGoal> = emptyList()
 	override fun save(assetGoal: AssetGoal): AssetGoal = assetGoal
-	override fun findById(id: UUID): AssetGoal? = goals.firstOrNull { it.id == id }
-	override fun findAll(): List<AssetGoal> = goals
+	override fun findByIdAndUserId(id: UUID, userId: UUID): AssetGoal? = goals.firstOrNull { it.id == id && it.userId == userId }
+	override fun findAllByUserId(userId: UUID): List<AssetGoal> = goals.filter { it.userId == userId }
 	override fun delete(assetGoal: AssetGoal) = Unit
 }
 
 private class RecordingThresholdNotificationService : ThresholdNotificationService {
 	val decisions = mutableListOf<ThresholdNotificationDecision>()
 	val occurredAts = mutableListOf<Instant>()
-	override fun process(decision: ThresholdNotificationDecision, occurredAt: Instant): Boolean {
+	override fun process(userId: UUID, decision: ThresholdNotificationDecision, occurredAt: Instant): Boolean {
 		decisions += decision
 		occurredAts += occurredAt
 		return true

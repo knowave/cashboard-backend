@@ -22,42 +22,57 @@ class AccountServiceImpl(
 	private val clock: Clock,
 ) : AccountService {
 	@Transactional
-	override fun create(command: CreateAccountCommand): AccountResult {
-		accountBalanceLockRepository.acquireTotalAssetLock()
-		val previousTotal = calculateTotalAmount()
-		val saved = accountRepository.save(command.toEntity())
+	override fun create(userId: UUID, command: CreateAccountCommand): AccountResult {
+		accountBalanceLockRepository.acquireTotalAssetLock(userId)
+		val previousTotal = calculateTotalAmount(userId)
+		val saved = accountRepository.save(command.toEntity(userId))
 		val currentTotal = Math.addExact(previousTotal, saved.balance)
-		eventPublisher.publishEvent(TotalAssetAmountChangedEvent(previousTotal, currentTotal, clock.instant()))
+		eventPublisher.publishEvent(
+			TotalAssetAmountChangedEvent(
+				userId = userId,
+				previousAmount = previousTotal,
+				currentAmount = currentTotal,
+				occurredAt = clock.instant(),
+			),
+		)
 		return saved.toResult()
 	}
 
-	override fun getAccount(id: UUID): AccountResult {
-		val account = accountRepository.findById(id) ?: throw NotFoundException("Account", id)
+	override fun getAccount(userId: UUID, id: UUID): AccountResult {
+		val account = accountRepository.findByIdAndUserId(id, userId) ?: throw NotFoundException("Account", id)
 		return account.toResult()
 	}
 
-	override fun getAllAccount(): List<AccountResult> = accountRepository.findAll().map { it.toResult() }
+	override fun getAllAccount(userId: UUID): List<AccountResult> =
+		accountRepository.findAllByUserId(userId).map { it.toResult() }
 
 	@Transactional
-	override fun update(id: UUID, command: UpdateAccountCommand): AccountResult {
-		accountBalanceLockRepository.acquireTotalAssetLock()
-		val previousTotal = calculateTotalAmount()
-		val account = accountRepository.findById(id) ?: throw NotFoundException("Account", id)
+	override fun update(userId: UUID, id: UUID, command: UpdateAccountCommand): AccountResult {
+		accountBalanceLockRepository.acquireTotalAssetLock(userId)
+		val previousTotal = calculateTotalAmount(userId)
+		val account = accountRepository.findByIdAndUserId(id, userId) ?: throw NotFoundException("Account", id)
 		val previousBalance = account.balance
 		account.update(command.name, command.type, command.balance)
 		val saved = accountRepository.save(account)
 		val currentTotal = Math.addExact(Math.subtractExact(previousTotal, previousBalance), saved.balance)
-		eventPublisher.publishEvent(TotalAssetAmountChangedEvent(previousTotal, currentTotal, clock.instant()))
+		eventPublisher.publishEvent(
+			TotalAssetAmountChangedEvent(
+				userId = userId,
+				previousAmount = previousTotal,
+				currentAmount = currentTotal,
+				occurredAt = clock.instant(),
+			),
+		)
 		return saved.toResult()
 	}
 
 	@Transactional
-	override fun delete(id: UUID) {
-		accountBalanceLockRepository.acquireTotalAssetLock()
-		val account = accountRepository.findById(id) ?: throw NotFoundException("Account", id)
+	override fun delete(userId: UUID, id: UUID) {
+		accountBalanceLockRepository.acquireTotalAssetLock(userId)
+		val account = accountRepository.findByIdAndUserId(id, userId) ?: throw NotFoundException("Account", id)
 		accountRepository.delete(account)
 	}
 
-	private fun calculateTotalAmount(): Long = accountRepository.findAll()
+	private fun calculateTotalAmount(userId: UUID): Long = accountRepository.findAllByUserId(userId)
 		.fold(0L) { total, account -> Math.addExact(total, account.balance) }
 }

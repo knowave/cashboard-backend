@@ -17,13 +17,18 @@ class WeeklyReportNotificationJob(
 ) : ScheduledNotificationJob {
 	override val name: String = "weekly-report"
 
+	// ponytail: NotificationScheduleContext has no userId yet (Stage 4, out of this task's
+	// scope). PLACEHOLDER_USER_ID keeps this compiling as a single implicit user.
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	override fun run(context: NotificationScheduleContext) {
 		if (context.date.dayOfWeek != DayOfWeek.MONDAY) return
 
-		val summary = provider.generate(context.date)
+		val userId = PLACEHOLDER_USER_ID
+		val summary = provider.generate(userId, context.date)
 		generationService.createIfEnabled(
+			userId,
 			NewNotification(
+				userId = userId,
 				type = NotificationType.WEEKLY_REPORT,
 				title = "지난주 소비 리포트가 도착했어요",
 				message = summary.toMessage(),

@@ -3,6 +3,7 @@ package com.knowave.cashboard.domains.loan.service.dto
 import com.knowave.cashboard.domains.loan.entity.Loan
 import java.math.BigDecimal
 import java.time.YearMonth
+import java.util.UUID
 
 data class CreateLoanCommand(
 	val principal: Long,
@@ -12,7 +13,8 @@ data class CreateLoanCommand(
 	val startMonth: YearMonth,
 	val maturityMonth: YearMonth,
 ) {
-	fun toEntity(): Loan = Loan(
+	fun toEntity(userId: UUID): Loan = Loan(
+		userId = userId,
 		principal = principal,
 		annualInterestRate = annualInterestRate,
 		monthlyPayment = monthlyPayment,

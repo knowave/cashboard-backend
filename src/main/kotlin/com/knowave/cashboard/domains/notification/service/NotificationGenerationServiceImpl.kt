@@ -5,6 +5,7 @@ import com.knowave.cashboard.domains.notification.repository.NotificationReposit
 import com.knowave.cashboard.domains.notification.repository.NotificationSettingRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.util.UUID
 
 @Service
 @Transactional
@@ -12,8 +13,8 @@ class NotificationGenerationServiceImpl(
 	private val notificationRepository: NotificationRepository,
 	private val settingRepository: NotificationSettingRepository,
 ) : NotificationGenerationService {
-	override fun createIfEnabled(candidate: NewNotification): Boolean {
-		if (!settingRepository.isEnabled(candidate.type)) return false
+	override fun createIfEnabled(userId: UUID, candidate: NewNotification): Boolean {
+		if (!settingRepository.isEnabled(userId, candidate.type)) return false
 		return notificationRepository.insertIfAbsent(candidate)
 	}
 }

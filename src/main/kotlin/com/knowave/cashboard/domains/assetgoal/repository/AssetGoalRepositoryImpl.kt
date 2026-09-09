@@ -10,9 +10,10 @@ class AssetGoalRepositoryImpl(
 ) : AssetGoalRepository {
 	override fun save(assetGoal: AssetGoal): AssetGoal = assetGoalJpaRepository.save(assetGoal)
 
-	override fun findById(id: UUID): AssetGoal? = assetGoalJpaRepository.findById(id).orElse(null)
+	override fun findByIdAndUserId(id: UUID, userId: UUID): AssetGoal? =
+		assetGoalJpaRepository.findByIdAndUserId(id, userId)
 
-	override fun findAll(): List<AssetGoal> = assetGoalJpaRepository.findAll()
+	override fun findAllByUserId(userId: UUID): List<AssetGoal> = assetGoalJpaRepository.findAllByUserId(userId)
 
 	override fun delete(assetGoal: AssetGoal) {
 		assetGoalJpaRepository.delete(assetGoal)
